@@ -1,3 +1,7 @@
+![platform](https://img.shields.io/badge/platform-macOS-blue)
+![status](https://img.shields.io/badge/status-internal-orange)
+![language](https://img.shields.io/badge/language-SwiftUI-red)
+
 # SNOMED Lookup (macOS)
 
 A lightweight macOS utility that lets you look up **SNOMED CT concept IDs from anywhere in macOS**.
