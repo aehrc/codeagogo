@@ -33,25 +33,17 @@ This is intended as a **developer / terminology power tool** for internal use.
 
 ---
 
-## Installation (recommended)
+## Installation
 
-1. Download the latest `SNOMED-Lookup-macOS.zip` from the **Releases** page.
-2. Unzip the archive.
-3. Drag **SNOMED Lookup.app** into `/Applications`.
-4. Launch the app.
+For step-by-step installation instructions, including how to handle macOS security prompts and Accessibility permissions, see:
 
-### First run permissions
+👉 **[INSTALL.md](INSTALL.md)**
 
-On first use, macOS will prompt you to grant **Accessibility** permission.
-
-If you are not prompted automatically:
-
-1. Open **System Settings → Privacy & Security → Accessibility**
-2. Enable **SNOMED Lookup**
-3. Quit and relaunch the app
-
-This permission is required so the app can issue a standard **Copy** action to read the current selection.  
-This is the same permission required by tools like Raycast, Alfred, and BetterTouchTool.
+In short:
+- Download the latest macOS zip from the **Releases** page
+- Move **SNOMED Lookup.app** to `/Applications`
+- Open it once via right-click → Open
+- Enable Accessibility permission when prompted
 
 ---
 
