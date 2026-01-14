@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 @main
 struct Snomed_LookupApp: App {
@@ -7,6 +8,23 @@ struct Snomed_LookupApp: App {
     var body: some Scene {
         Settings {
             SettingsView()
+        }
+        .commands {
+            // Add items in the Help menu (native place for diagnostics)
+            CommandGroup(after: .help) {
+                Button("Copy SNOMED Lookup Diagnostics") {
+                    Diagnostics.copyRecentLogsToClipboard(minutes: 15)
+                }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+
+                Divider()
+
+                // Optional: quick toggle without opening Settings
+                Toggle("Enable Debug Logging", isOn: Binding(
+                    get: { AppLog.isDebugEnabled },
+                    set: { AppLog.isDebugEnabled = $0 }
+                ))
+            }
         }
     }
 }

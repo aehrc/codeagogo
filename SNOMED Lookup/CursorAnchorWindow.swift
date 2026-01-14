@@ -7,6 +7,9 @@ final class CursorAnchorWindow {
         let frame = NSRect(x: point.x, y: point.y, width: 1, height: 1)
 
         let w = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        
+        w.collectionBehavior = [.moveToActiveSpace, .transient, .fullScreenAuxiliary]
+        
         w.level = .floating
         w.isOpaque = false
         w.backgroundColor = .clear

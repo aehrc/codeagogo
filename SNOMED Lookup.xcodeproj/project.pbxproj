@@ -10,22 +10,9 @@
 		1C305A7A2F16318300F58379 /* SNOMED Lookup.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "SNOMED Lookup.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		1C305AA42F1713A200F58379 /* Exceptions for "SNOMED Lookup" folder in "SNOMED Lookup" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				"SNOMED-Lookup-Info.plist",
-			);
-			target = 1C305A792F16318300F58379 /* SNOMED Lookup */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		1C305A7C2F16318300F58379 /* SNOMED Lookup */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				1C305AA42F1713A200F58379 /* Exceptions for "SNOMED Lookup" folder in "SNOMED Lookup" target */,
-			);
 			path = "SNOMED Lookup";
 			sourceTree = "<group>";
 		};
@@ -317,6 +304,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 4J95R3J2BS;
