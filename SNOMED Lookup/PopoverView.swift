@@ -36,6 +36,10 @@ struct PopoverView: View {
                     .disabled(model.result?.pt == nil)
                 Button("Copy ID") { model.copyToPasteboard(model.result?.conceptId) }
                     .disabled(model.result?.conceptId == nil)
+                Button("Copy ID & FSN") { model.copyToPasteboard(model.result!.conceptId + " | " + model.result!.fsn! + " | ") }
+                    .disabled(model.result?.conceptId == nil || model.result?.fsn == nil)
+                Button("Copy ID & PT") { model.copyToPasteboard(model.result!.conceptId + " | " + model.result!.pt! + " | ") }
+                    .disabled(model.result?.conceptId == nil || model.result?.pt == nil)
                 Spacer()
             }
             .padding(.top, 6)
