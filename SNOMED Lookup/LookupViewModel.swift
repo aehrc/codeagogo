@@ -9,7 +9,7 @@ final class LookupViewModel: ObservableObject {
     @Published var result: ConceptResult?
 
     private let selectionReader = SystemSelectionReader()
-    private let client = SnowstormClient()
+    private let client = OntoserverClient()
 
     func lookupFromSystemSelection() async {
         errorMessage = nil

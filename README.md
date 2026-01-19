@@ -6,7 +6,7 @@
 
 A lightweight macOS utility that lets you look up **SNOMED CT concept IDs from anywhere in macOS**.
 
-Select a SNOMED CT concept ID in any application, press a global hotkey, and a popover appears showing the concept’s details retrieved from the SNOMED Concept Lookup Service.
+Select a SNOMED CT concept ID in any application, press a global hotkey, and a popover appears showing the concept’s details retrieved from the CSIRO Ontoserver.
 
 This is intended as a **developer / terminology power tool** for internal use.
 
@@ -16,7 +16,7 @@ This is intended as a **developer / terminology power tool** for internal use.
 
 - Global hotkey (works system-wide)
 - Reads the current text selection
-- Looks up SNOMED CT concepts via the SNOMED Concept Lookup Service (Snowstorm)
+- Looks up SNOMED CT concepts via the CSIRO Ontoserver (Snowstorm)
 - Displays:
   - Concept ID
   - Preferred Term (PT)
@@ -68,10 +68,10 @@ Open the app’s **Settings** window to:
 
 Concept data is retrieved from:
 
-- **SNOMED Concept Lookup Service**
-  - https://lookup.snomedtools.org/
-  - Backed by Snowstorm
-  - Searches across editions and branches
+- **CSIRO Ontoserver**
+  - https://tx.ontoserver.csiro.au/fhir
+  - FHIR Terminology Server
+  - Searches across all available SNOMED CT editions
 
 No user data is stored or transmitted beyond the selected concept ID.
 

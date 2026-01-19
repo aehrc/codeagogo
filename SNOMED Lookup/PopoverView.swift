@@ -26,7 +26,7 @@ struct PopoverView: View {
                 row("FSN", model.result?.fsn ?? "—")
                 row("PT", model.result?.pt ?? "—")
                 row("Status", model.result?.activeText ?? "—")
-                row("Branch", model.result?.branch ?? "—")
+                row("Edition", model.result?.branch ?? "—")
             }
 
             HStack {
