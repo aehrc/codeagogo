@@ -1,5 +1,6 @@
 import SwiftUI
 import Carbon.HIToolbox
+import Combine
 
 struct SettingsView: View {
     @ObservedObject private var hk = HotKeySettings.shared
@@ -47,6 +48,31 @@ struct SettingsView: View {
                 }
                 .padding(.top, 4)
             }
+            
+            GroupBox("FHIR Endpoint") {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .center) {
+                        Text("Base URL")
+                        TextField("https://tx.ontoserver.csiro.au/fhir", text: Binding(
+                            get: { FHIROptions.shared.baseURLString },
+                            set: { FHIROptions.shared.baseURLString = $0 }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(.body, design: .monospaced))
+                        .disableAutocorrection(true)
+                    }
+
+                    HStack(spacing: 10) {
+                        Button("Save") {
+                            FHIROptions.shared.save()
+                        }
+                        Text("Requests will use this FHIR server. Invalid URLs fall back to the default.")
+                            .foregroundStyle(.secondary)
+                            .font(.footnote)
+                    }
+                }
+                .padding(.top, 4)
+            }
 
             GroupBox("Logging") {
                 VStack(alignment: .leading, spacing: 10) {
@@ -68,7 +94,7 @@ struct SettingsView: View {
             Spacer()
         }
         .padding(16)
-        .frame(width: 520, height: 360)
+        .frame(width: 520, height: 460)
     }
 
     private func bindingFor(_ flag: NSEvent.ModifierFlags) -> Binding<Bool> {
@@ -88,3 +114,4 @@ struct SettingsView: View {
         )
     }
 }
+

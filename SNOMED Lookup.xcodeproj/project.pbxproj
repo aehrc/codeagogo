@@ -6,8 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		1C5364892F1DE6670056E6F3 /* FHIROptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C5364882F1DE6670056E6F3 /* FHIROptions.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		1C305A7A2F16318300F58379 /* SNOMED Lookup.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "SNOMED Lookup.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1C5364882F1DE6670056E6F3 /* FHIROptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FHIROptions.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -34,6 +39,7 @@
 			children = (
 				1C305A7C2F16318300F58379 /* SNOMED Lookup */,
 				1C305A7B2F16318300F58379 /* Products */,
+				1C5364882F1DE6670056E6F3 /* FHIROptions.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -119,6 +125,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1C5364892F1DE6670056E6F3 /* FHIROptions.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -3,7 +3,7 @@ import os
 
 final class OntoserverClient {
     private let internationalEditionId = "900000000000207008"
-    private let baseURL = URL(string: "https://tx.ontoserver.csiro.au/fhir")!
+    private var baseURL: URL { FHIROptions.shared.baseURL }
     private let session: URLSession
     
     // Cache (conceptId -> (result, timestamp))
