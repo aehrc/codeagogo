@@ -1,58 +1,121 @@
 import Foundation
 import os
 
+// MARK: - Concept Result Model
+
+struct ConceptResult {
+    let conceptId: String
+    let branch: String
+    let fsn: String?
+    let pt: String?
+    let active: Bool?
+    let effectiveTime: String?
+    let moduleId: String?
+
+    var activeText: String {
+        switch active {
+        case true: return "active"
+        case false: return "inactive"
+        default: return "—"
+        }
+    }
+}
+
+// MARK: - Constants
+
+private enum SNOMEDConstants {
+    /// SNOMED CT International Edition module ID
+    static let internationalEditionId = "900000000000207008"
+    /// SNOMED CT FSN (Fully Specified Name) designation type ID
+    static let fsnDesignationCode = "900000000000003001"
+}
+
+private enum NetworkConstants {
+    /// Cache TTL: 6 hours in seconds
+    static let cacheTTL: TimeInterval = 6 * 60 * 60
+    /// Maximum retry attempts for transient failures
+    static let maxRetries = 2
+    /// Base delay for exponential backoff (doubles each retry)
+    static let baseRetryDelay: TimeInterval = 0.5
+    /// HTTP request timeout in seconds
+    static let requestTimeout: TimeInterval = 30
+}
+
+// MARK: - Client Errors
+
+enum OntoserverError: LocalizedError {
+    case invalidURL(String)
+    case conceptNotFound(String)
+    case noEditionsFound
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL(let details):
+            return "Failed to construct request URL: \(details)"
+        case .conceptNotFound(let conceptId):
+            return "Concept \(conceptId) not found in any SNOMED edition"
+        case .noEditionsFound:
+            return "No SNOMED editions found on server"
+        }
+    }
+}
+
+// MARK: - FHIR Client
+
 final class OntoserverClient {
-    private let internationalEditionId = "900000000000207008"
     private var baseURL: URL { FHIROptions.shared.baseURL }
     private let session: URLSession
-    
-    // Cache (conceptId -> (result, timestamp))
-    private var cache: [String: (ConceptResult, Date)] = [:]
-    private let cacheTTL: TimeInterval = 60 * 60 * 6 // 6 hours
-    
+
+    // Thread-safe cache using an actor
+    private let cache = ConceptCache()
+
     init(session: URLSession = .shared) {
         self.session = session
         AppLog.info(AppLog.network, "OntoserverClient init base=\(baseURL.absoluteString)")
     }
-    
+
     func lookup(conceptId: String) async throws -> ConceptResult {
-        if let (cached, ts) = cache[conceptId], Date().timeIntervalSince(ts) < cacheTTL {
+        if let cached = await cache.get(conceptId, ttl: NetworkConstants.cacheTTL) {
             AppLog.debug(AppLog.network, "cache hit conceptId=\(conceptId)")
             return cached
         }
-        
+
         AppLog.info(AppLog.network, "lookup conceptId=\(conceptId)")
-        
+
         // Step 1: Try latest international edition first
-        if let result = try await lookupInSystem(conceptId: conceptId, system: "http://snomed.info/sct", version: "http://snomed.info/sct/" + internationalEditionId) {
-            cache[conceptId] = (result, Date())
+        if let result = try await lookupInSystem(conceptId: conceptId, system: "http://snomed.info/sct", version: "http://snomed.info/sct/" + SNOMEDConstants.internationalEditionId) {
+            await cache.set(conceptId, result: result)
             AppLog.info(AppLog.network, "lookup success in international edition conceptId=\(conceptId)")
             return result
         }
-        
+
         AppLog.info(AppLog.network, "not found in international edition, trying all editions conceptId=\(conceptId)")
-        
+
         // Step 2: Get all SNOMED CT editions
         let editions = try await fetchAllEditions()
-        
+
         // Step 3: Look up in all editions in parallel
         let result = try await lookupInAllEditions(conceptId: conceptId, editions: editions)
-        
-        cache[conceptId] = (result, Date())
+
+        await cache.set(conceptId, result: result)
         AppLog.info(AppLog.network, "lookup success conceptId=\(conceptId) edition=\(result.branch)")
         return result
     }
     
     private func lookupInSystem(conceptId: String, system: String, version: String) async throws -> ConceptResult? {
-        var comps = URLComponents(url: baseURL.appendingPathComponent("CodeSystem/$lookup"), resolvingAgainstBaseURL: false)!
+        guard var comps = URLComponents(url: baseURL.appendingPathComponent("CodeSystem/$lookup"), resolvingAgainstBaseURL: false) else {
+            throw OntoserverError.invalidURL("Cannot create URL components from base URL")
+        }
         comps.queryItems = [
             URLQueryItem(name: "system", value: system),
             URLQueryItem(name: "version", value: version),
             URLQueryItem(name: "code", value: conceptId),
             URLQueryItem(name: "_format", value: "json")
         ]
-        
-        let url = comps.url!
+
+        guard let url = comps.url else {
+            throw OntoserverError.invalidURL("Invalid query parameters for lookup request")
+        }
         AppLog.debug(AppLog.network, "lookupInSystem request system=\(system) code=\(conceptId) url=\(url.absoluteString)")
         
         do {
@@ -65,28 +128,26 @@ final class OntoserverClient {
     }
     
     private func fetchAllEditions() async throws -> [SNOMEDEdition] {
-        var comps = URLComponents(url: baseURL.appendingPathComponent("CodeSystem"), resolvingAgainstBaseURL: false)!
+        guard var comps = URLComponents(url: baseURL.appendingPathComponent("CodeSystem"), resolvingAgainstBaseURL: false) else {
+            throw OntoserverError.invalidURL("Cannot create URL components from base URL")
+        }
         comps.queryItems = [
             // Look for both SCT and xSCT
             URLQueryItem(name: "url", value: "http://snomed.info/sct,http://snomed.info/xsct"),
             URLQueryItem(name: "_format", value: "json")
         ]
 
-        let url = comps.url!
+        guard let url = comps.url else {
+            throw OntoserverError.invalidURL("Invalid query parameters for editions request")
+        }
         AppLog.debug(AppLog.network, "fetchAllEditions request url=\(url.absoluteString)")
 
         let bundle: FHIRBundle = try await getJSON(url)
 
         guard let entries = bundle.entry, !entries.isEmpty else {
             AppLog.error(AppLog.network, "no SNOMED editions found")
-            throw NSError(
-                domain: "OntoserverClient",
-                code: 404,
-                userInfo: [NSLocalizedDescriptionKey: "No SNOMED editions found"]
-            )
+            throw OntoserverError.noEditionsFound
         }
-
-        let internationalEditionId = "900000000000207008"
 
         // One CodeSystem per edition URI
         var editionMap: [String: CodeSystem] = [:]
@@ -97,7 +158,7 @@ final class OntoserverClient {
             guard let editionURI = extractEditionURI(from: rawVersion) else { continue }
 
             // Strip out the International edition (handled elsewhere)
-            if editionURI.hasSuffix("/\(internationalEditionId)") {
+            if editionURI.hasSuffix("/\(SNOMEDConstants.internationalEditionId)") {
                 continue
             }
 
@@ -175,11 +236,7 @@ final class OntoserverClient {
             
             // If we get here, no edition had the concept
             AppLog.error(AppLog.network, "concept not found in any edition conceptId=\(conceptId)")
-            throw NSError(
-                domain: "OntoserverClient",
-                code: 404,
-                userInfo: [NSLocalizedDescriptionKey: "Concept not found in any SNOMED edition"]
-            )
+            throw OntoserverError.conceptNotFound(conceptId)
         }
     }
     
@@ -236,8 +293,8 @@ final class OntoserverClient {
                         }
                     }
                     
-                    // FSN has use code "900000000000003001"
-                    if use == "900000000000003001" {
+                    // FSN has use code for Fully Specified Name
+                    if use == SNOMEDConstants.fsnDesignationCode {
                         fsn = value
                     }
                 }
@@ -272,31 +329,40 @@ final class OntoserverClient {
         }
         
         // If version is provided and non-empty, use it
+        // Format: http://snomed.info/sct/<editionId>/version/<date>
+        // split() omits empty strings, so indices are: [0]=http: [1]=snomed.info [2]=sct [3]=editionId [4]=version [5]=date
         if let version = version, !version.isEmpty {
-            // Extract editionId from system URL as before
             let components = version.split(separator: "/")
-            
-            if components.count >= 4 {
+
+            if components.count >= 6 {
+                // Full form with /version/date suffix
+                let editionId = String(components[3])
+                let date = String(components[5])
+                let humanReadableName = getEditionName(for: editionId)
+                return mark("\(humanReadableName) (\(date))")
+            } else if components.count >= 4 {
+                // Short form without /version/date suffix
                 let editionId = String(components[3])
                 let humanReadableName = getEditionName(for: editionId)
-                return mark("\(humanReadableName) (\(components[5]))")
+                return mark(humanReadableName)
             }
-            // Fallback if no editionId found
+            // Fallback if format doesn't match
             return mark("\(system) (\(version))")
         }
-        
-        // If no version provided, fallback to previous logic
+
+        // If no version provided, fallback to system URL parsing
         let components = system.split(separator: "/")
-        
-        if components.count >= 4 {
-            // Format: sct/<edition>/<version or 'version'>/<date>
+
+        if components.count >= 6 {
+            // Full form with /version/date suffix
+            let editionId = String(components[3])
+            let date = String(components[5])
+            let humanReadableName = getEditionName(for: editionId)
+            return mark("\(humanReadableName) (\(date))")
+        } else if components.count >= 4 {
+            // Short form without /version/date suffix
             let editionId = String(components[3])
             let humanReadableName = getEditionName(for: editionId)
-            
-            if components.count >= 6 {
-                let urlVersion = String(components[5])
-                return mark("\(humanReadableName) (\(urlVersion))")
-            }
             return mark(humanReadableName)
         }
         
@@ -324,63 +390,174 @@ final class OntoserverClient {
             "999000011000000103": "United Kingdom Clinical",
             "999000021000000109": "United Kingdom Drug",
             "21000210109": "Belgian",
-            "83821000000107": "United Kingdom Edition"
+            "83821000000107": "United Kingdom Edition",
+            "11000220105" : "Ireland"
         ]
         
         return editionNames[editionId] ?? editionId
     }
     
     private func getJSON<T: Decodable>(_ url: URL) async throws -> T {
+        var lastError: Error?
+
+        for attempt in 0...NetworkConstants.maxRetries {
+            if attempt > 0 {
+                let delay = NetworkConstants.baseRetryDelay * pow(2.0, Double(attempt - 1))
+                AppLog.info(AppLog.network, "retry attempt=\(attempt)/\(NetworkConstants.maxRetries) delay=\(delay)s url=\(url.absoluteString)")
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
+
+            do {
+                return try await performRequest(url)
+            } catch {
+                lastError = error
+
+                // Only retry on transient errors
+                if !isRetryableError(error) {
+                    throw error
+                }
+
+                if attempt == NetworkConstants.maxRetries {
+                    AppLog.error(AppLog.network, "all retries exhausted url=\(url.absoluteString)")
+                }
+            }
+        }
+
+        throw lastError ?? URLError(.unknown)
+    }
+
+    private func performRequest<T: Decodable>(_ url: URL) async throws -> T {
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.setValue("application/fhir+json", forHTTPHeaderField: "Accept")
-        
+        req.timeoutInterval = NetworkConstants.requestTimeout
+
         AppLog.debug(AppLog.network, "request GET url=\(url.absoluteString)")
-        
+
         do {
             let (data, resp) = try await session.data(for: req)
-            
+
             if let http = resp as? HTTPURLResponse {
                 AppLog.info(AppLog.network, "response status=\(http.statusCode) url=\(url.absoluteString)")
             } else {
                 AppLog.warning(AppLog.network, "response non-HTTP url=\(url.absoluteString)")
             }
-            
+
             guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
                 let body = String(data: data, encoding: .utf8) ?? ""
                 let bodySnippet = AppLog.snippet(body, limit: 2000)
-                
+
                 AppLog.error(AppLog.network, "HTTP error code=\(code) url=\(url.absoluteString) body=\(bodySnippet)")
-                
+
                 throw NSError(
                     domain: "OntoserverClient",
                     code: code,
                     userInfo: [NSLocalizedDescriptionKey: "HTTP \(code): \(bodySnippet)"]
                 )
             }
-            
+
             do {
                 return try JSONDecoder().decode(T.self, from: data)
             } catch {
                 let body = String(data: data, encoding: .utf8) ?? ""
                 let bodySnippet = AppLog.snippet(body, limit: 2000)
-                
+
                 AppLog.error(AppLog.network, "decode error url=\(url.absoluteString) error=\(error.localizedDescription) body=\(bodySnippet)")
                 throw error
             }
-            
+
         } catch let urlError as URLError {
             AppLog.error(
                 AppLog.network,
                 "URLError url=\(url.absoluteString) code=\(urlError.code.rawValue) desc=\(urlError.localizedDescription)"
             )
             throw urlError
-            
+
         } catch {
             AppLog.error(AppLog.network, "error url=\(url.absoluteString) desc=\(error.localizedDescription)")
             throw error
         }
+    }
+
+    /// Determines if an error is transient and worth retrying
+    private func isRetryableError(_ error: Error) -> Bool {
+        // Retry on URLError network issues
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut,
+                 .cannotConnectToHost,
+                 .networkConnectionLost,
+                 .dnsLookupFailed,
+                 .notConnectedToInternet,
+                 .secureConnectionFailed:
+                return true
+            default:
+                return false
+            }
+        }
+
+        // Retry on 5xx server errors
+        if let nsError = error as NSError?, nsError.domain == "OntoserverClient" {
+            let code = nsError.code
+            return code >= 500 && code < 600
+        }
+
+        return false
+    }
+}
+
+// MARK: - Thread-Safe LRU Cache
+
+private actor ConceptCache {
+    /// Maximum number of cached concept results
+    private let maxSize = 100
+
+    private struct CacheEntry {
+        let result: ConceptResult
+        let createdAt: Date
+        var lastAccessedAt: Date
+    }
+
+    private var storage: [String: CacheEntry] = [:]
+
+    func get(_ conceptId: String, ttl: TimeInterval) -> ConceptResult? {
+        guard var entry = storage[conceptId],
+              Date().timeIntervalSince(entry.createdAt) < ttl else {
+            // Remove expired entry if it exists
+            storage.removeValue(forKey: conceptId)
+            return nil
+        }
+        // Update last accessed time for LRU tracking
+        entry.lastAccessedAt = Date()
+        storage[conceptId] = entry
+        return entry.result
+    }
+
+    func set(_ conceptId: String, result: ConceptResult) {
+        // If at capacity and this is a new entry, evict the least recently used
+        if storage[conceptId] == nil && storage.count >= maxSize {
+            evictLeastRecentlyUsed()
+        }
+
+        let now = Date()
+        storage[conceptId] = CacheEntry(
+            result: result,
+            createdAt: now,
+            lastAccessedAt: now
+        )
+    }
+
+    private func evictLeastRecentlyUsed() {
+        guard let lruKey = storage.min(by: { $0.value.lastAccessedAt < $1.value.lastAccessedAt })?.key else {
+            return
+        }
+        storage.removeValue(forKey: lruKey)
+    }
+
+    /// Returns the current number of cached entries (for testing)
+    func count() -> Int {
+        storage.count
     }
 }
 

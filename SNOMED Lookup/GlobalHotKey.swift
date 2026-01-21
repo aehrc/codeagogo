@@ -5,6 +5,7 @@ import Cocoa
 /// Note: Global hotkeys can conflict with system/app shortcuts - you can make this configurable later.
 final class GlobalHotKey {
     private var hotKeyRef: EventHotKeyRef?
+    private var eventHandlerRef: EventHandlerRef?
     private var handler: (() -> Void)?
 
     private var keyCode: UInt32
@@ -12,19 +13,25 @@ final class GlobalHotKey {
 
     init(keyCode: UInt32, modifiers: NSEvent.ModifierFlags, handler: @escaping () -> Void) {
         self.keyCode = keyCode
-        self.modifiers = Self.carbonModifiers(from: modifiers)
+        self.modifiers = HotKeySettings.carbonModifiers(from: modifiers)
         self.handler = handler
+    }
+
+    deinit {
+        stop()
     }
 
     func start() {
         var eventSpec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
 
+        var handlerRef: EventHandlerRef?
         InstallEventHandler(GetEventDispatcherTarget(), { _, _, userData in
             guard let userData else { return noErr }
             let me = Unmanaged<GlobalHotKey>.fromOpaque(userData).takeUnretainedValue()
             me.handler?()
             return noErr
-        }, 1, &eventSpec, UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque()), nil)
+        }, 1, &eventSpec, UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque()), &handlerRef)
+        eventHandlerRef = handlerRef
 
         let hotKeyID = EventHotKeyID(signature: OSType("SNMD".fourCharCodeValue), id: 1)
         RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetEventDispatcherTarget(), 0, &hotKeyRef)
@@ -35,22 +42,17 @@ final class GlobalHotKey {
             UnregisterEventHotKey(ref)
             hotKeyRef = nil
         }
+        if let ref = eventHandlerRef {
+            RemoveEventHandler(ref)
+            eventHandlerRef = nil
+        }
     }
 
     func update(keyCode: UInt32, modifiers: NSEvent.ModifierFlags) {
         stop()
         self.keyCode = keyCode
-        self.modifiers = Self.carbonModifiers(from: modifiers)
+        self.modifiers = HotKeySettings.carbonModifiers(from: modifiers)
         start()
-    }
-
-    static func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {
-        var m: UInt32 = 0
-        if flags.contains(.command) { m |= UInt32(cmdKey) }
-        if flags.contains(.option) { m |= UInt32(optionKey) }
-        if flags.contains(.control) { m |= UInt32(controlKey) }
-        if flags.contains(.shift) { m |= UInt32(shiftKey) }
-        return m
     }
 }
 

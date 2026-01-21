@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 
 @main
 struct Snomed_LookupApp: App {

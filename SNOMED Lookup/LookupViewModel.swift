@@ -2,14 +2,39 @@ import Foundation
 import Combine
 import AppKit
 
+// MARK: - Protocols for Dependency Injection
+
+/// Protocol for reading system selection (enables testing)
+protocol SelectionReading {
+    func readSelectionByCopying() throws -> String
+}
+
+/// Protocol for SNOMED concept lookup (enables testing)
+protocol ConceptLookupClient {
+    func lookup(conceptId: String) async throws -> ConceptResult
+}
+
+// MARK: - Default Implementations
+
+extension SystemSelectionReader: SelectionReading {}
+extension OntoserverClient: ConceptLookupClient {}
+
+// MARK: - View Model
+
 @MainActor
 final class LookupViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var result: ConceptResult?
 
-    private let selectionReader = SystemSelectionReader()
-    private let client = OntoserverClient()
+    private let selectionReader: SelectionReading
+    private let client: ConceptLookupClient
+
+    init(selectionReader: SelectionReading? = nil,
+         client: ConceptLookupClient? = nil) {
+        self.selectionReader = selectionReader ?? SystemSelectionReader()
+        self.client = client ?? OntoserverClient()
+    }
 
     func lookupFromSystemSelection() async {
         errorMessage = nil

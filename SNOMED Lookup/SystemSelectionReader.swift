@@ -10,6 +10,9 @@ import Carbon.HIToolbox
 /// Requires Accessibility permission to send key events.
 final class SystemSelectionReader {
 
+    /// Delay after sending Cmd+C before reading clipboard (seconds)
+    private let clipboardCopyDelay: TimeInterval = 0.08
+
     private struct PasteboardSnapshot {
         let items: [[NSPasteboard.PasteboardType: Data]]
         let changeCount: Int
@@ -29,15 +32,17 @@ final class SystemSelectionReader {
         }
 
         // Small wait for the copy to complete
-        Thread.sleep(forTimeInterval: 0.08)
+        Thread.sleep(forTimeInterval: clipboardCopyDelay)
 
         // Read copied text
         let copied = pb.string(forType: .string) ?? ""
-        
-        
-        NSLog("SNOMED Lookup — raw clipboard string: '%@'", copied)
-        NSLog("SNOMED Lookup — debug chars: %@", debugDescribe(copied))
-        NSLog("SNOMED Lookup — utf16 count: %ld", copied.utf16.count)
+
+        // Debug logging (only when enabled in settings)
+        if AppLog.isDebugEnabled {
+            AppLog.debug(AppLog.selection, "raw clipboard string: '\(copied)'")
+            AppLog.debug(AppLog.selection, "debug chars: \(debugDescribe(copied))")
+            AppLog.debug(AppLog.selection, "utf16 count: \(copied.utf16.count)")
+        }
 
         // Restore clipboard
         restorePasteboard(pb, snapshot: snapshot)
