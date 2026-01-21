@@ -3,15 +3,67 @@ import os
 
 // MARK: - Concept Result Model
 
+/// The result of looking up a SNOMED CT concept from the terminology server.
+///
+/// `ConceptResult` encapsulates all relevant metadata returned from a FHIR
+/// `CodeSystem/$lookup` operation, including the concept's terms, status,
+/// and edition information.
+///
+/// ## Example
+///
+/// ```swift
+/// let result = ConceptResult(
+///     conceptId: "73211009",
+///     branch: "International (20240101)",
+///     fsn: "Diabetes mellitus (disorder)",
+///     pt: "Diabetes mellitus",
+///     active: true,
+///     effectiveTime: "20020131",
+///     moduleId: "900000000000207008"
+/// )
+///
+/// print(result.fsn ?? "Unknown")  // "Diabetes mellitus (disorder)"
+/// print(result.activeText)        // "active"
+/// ```
 struct ConceptResult {
+    /// The SNOMED CT concept identifier (6-18 digits).
     let conceptId: String
+
+    /// Human-readable edition name with version date.
+    ///
+    /// Examples: "International (20240101)", "Australian (20231130)"
     let branch: String
+
+    /// The Fully Specified Name — the unambiguous term with semantic tag.
+    ///
+    /// Example: "Diabetes mellitus (disorder)"
     let fsn: String?
+
+    /// The Preferred Term — the commonly used clinical term.
+    ///
+    /// Example: "Diabetes mellitus"
     let pt: String?
+
+    /// Whether the concept is currently active in SNOMED CT.
+    ///
+    /// - `true`: The concept is active and can be used
+    /// - `false`: The concept is inactive/retired
+    /// - `nil`: Status information was not available
     let active: Bool?
+
+    /// The effective date when this concept version was published.
+    ///
+    /// Format: YYYYMMDD (e.g., "20020131")
     let effectiveTime: String?
+
+    /// The SNOMED CT module that contains this concept.
+    ///
+    /// Example: "900000000000207008" (International Core Module)
     let moduleId: String?
 
+    /// Human-readable representation of the active status.
+    ///
+    /// - Returns: "active", "inactive", or "—" if unknown
     var activeText: String {
         switch active {
         case true: return "active"
@@ -43,9 +95,25 @@ private enum NetworkConstants {
 
 // MARK: - Client Errors
 
+/// Errors that can occur when communicating with the FHIR terminology server.
+///
+/// These errors represent failures in the lookup process that should be
+/// displayed to the user with appropriate guidance.
 enum OntoserverError: LocalizedError {
+    /// Failed to construct a valid URL for the API request.
+    ///
+    /// This typically indicates a configuration issue with the FHIR endpoint
+    /// or invalid query parameters.
     case invalidURL(String)
+
+    /// The concept ID was not found in any available SNOMED CT edition.
+    ///
+    /// The associated value contains the concept ID that was searched for.
     case conceptNotFound(String)
+
+    /// No SNOMED CT editions were returned by the server.
+    ///
+    /// This may indicate a server configuration issue or connectivity problem.
     case noEditionsFound
 
     var errorDescription: String? {
@@ -62,18 +130,76 @@ enum OntoserverError: LocalizedError {
 
 // MARK: - FHIR Client
 
+/// Client for looking up SNOMED CT concepts via a FHIR R4 terminology server.
+///
+/// `OntoserverClient` communicates with FHIR terminology servers (primarily CSIRO
+/// Ontoserver) to retrieve concept details using the `CodeSystem/$lookup` operation.
+///
+/// ## Lookup Strategy
+///
+/// The client uses a multi-step lookup strategy for efficiency:
+///
+/// 1. **Check cache** — Return immediately if the concept is cached and not expired
+/// 2. **Try International Edition** — Most concepts are in the International Edition
+/// 3. **Parallel edition search** — If not found, search all available editions concurrently
+///
+/// ## Caching
+///
+/// Results are cached in memory with a 6-hour TTL and LRU eviction at 100 entries.
+/// The cache is thread-safe using a Swift actor.
+///
+/// ## Retry Logic
+///
+/// Transient network failures (timeouts, connection issues, 5xx errors) are
+/// automatically retried up to 2 times with exponential backoff.
+///
+/// ## Usage
+///
+/// ```swift
+/// let client = OntoserverClient()
+///
+/// do {
+///     let result = try await client.lookup(conceptId: "73211009")
+///     print("FSN: \(result.fsn ?? "Unknown")")
+///     print("PT: \(result.pt ?? "Unknown")")
+/// } catch OntoserverError.conceptNotFound(let id) {
+///     print("Concept \(id) not found")
+/// }
+/// ```
+///
+/// ## Thread Safety
+///
+/// This class is safe to use from any thread. Network operations use
+/// async/await, and the cache is protected by a Swift actor.
 final class OntoserverClient {
+    /// The base URL for FHIR API requests, read from user settings.
     private var baseURL: URL { FHIROptions.shared.baseURL }
+
+    /// The URL session used for network requests.
     private let session: URLSession
 
-    // Thread-safe cache using an actor
+    /// Thread-safe LRU cache for lookup results.
     private let cache = ConceptCache()
 
+    /// Creates a new Ontoserver client.
+    ///
+    /// - Parameter session: The URL session to use for requests. Defaults to `.shared`.
     init(session: URLSession = .shared) {
         self.session = session
         AppLog.info(AppLog.network, "OntoserverClient init base=\(baseURL.absoluteString)")
     }
 
+    /// Looks up a SNOMED CT concept by its identifier.
+    ///
+    /// This method implements a multi-step lookup strategy:
+    /// 1. Returns cached result if available and not expired
+    /// 2. Tries the International Edition first (most concepts are there)
+    /// 3. Falls back to searching all available editions in parallel
+    ///
+    /// - Parameter conceptId: The SNOMED CT concept identifier (6-18 digits)
+    /// - Returns: The concept details including FSN, PT, and status
+    /// - Throws: `OntoserverError.conceptNotFound` if the concept doesn't exist
+    ///           in any edition, or network errors if the server is unreachable
     func lookup(conceptId: String) async throws -> ConceptResult {
         if let cached = await cache.get(conceptId, ttl: NetworkConstants.cacheTTL) {
             AppLog.debug(AppLog.network, "cache hit conceptId=\(conceptId)")
@@ -509,18 +635,55 @@ final class OntoserverClient {
 
 // MARK: - Thread-Safe LRU Cache
 
+/// Thread-safe in-memory cache for SNOMED CT concept lookup results.
+///
+/// `ConceptCache` uses Swift actors for thread safety and implements:
+/// - **TTL expiration**: Entries expire after a configurable time-to-live
+/// - **LRU eviction**: When at capacity, the least recently used entry is removed
+///
+/// ## Thread Safety
+///
+/// As a Swift actor, all method calls are serialized automatically. Safe to
+/// call from any thread or task without external synchronization.
+///
+/// ## Example
+///
+/// ```swift
+/// let cache = ConceptCache()
+///
+/// // Store a result
+/// await cache.set("73211009", result: conceptResult)
+///
+/// // Retrieve with 6-hour TTL
+/// if let cached = await cache.get("73211009", ttl: 6 * 60 * 60) {
+///     print("Cache hit!")
+/// }
+/// ```
 private actor ConceptCache {
-    /// Maximum number of cached concept results
+    /// Maximum number of cached concept results before LRU eviction.
     private let maxSize = 100
 
+    /// Internal cache entry with timestamps for TTL and LRU tracking.
     private struct CacheEntry {
+        /// The cached concept result.
         let result: ConceptResult
+        /// When this entry was first created (for TTL).
         let createdAt: Date
+        /// When this entry was last accessed (for LRU eviction).
         var lastAccessedAt: Date
     }
 
+    /// The underlying storage dictionary keyed by concept ID.
     private var storage: [String: CacheEntry] = [:]
 
+    /// Retrieves a cached concept result if it exists and hasn't expired.
+    ///
+    /// This method also updates the last accessed time for LRU tracking.
+    ///
+    /// - Parameters:
+    ///   - conceptId: The SNOMED CT concept identifier to look up
+    ///   - ttl: Time-to-live in seconds; entries older than this are considered expired
+    /// - Returns: The cached result, or `nil` if not found or expired
     func get(_ conceptId: String, ttl: TimeInterval) -> ConceptResult? {
         guard var entry = storage[conceptId],
               Date().timeIntervalSince(entry.createdAt) < ttl else {
@@ -534,6 +697,14 @@ private actor ConceptCache {
         return entry.result
     }
 
+    /// Stores a concept result in the cache.
+    ///
+    /// If the cache is at capacity and this is a new entry (not an update),
+    /// the least recently used entry is evicted first.
+    ///
+    /// - Parameters:
+    ///   - conceptId: The SNOMED CT concept identifier as the cache key
+    ///   - result: The concept result to cache
     func set(_ conceptId: String, result: ConceptResult) {
         // If at capacity and this is a new entry, evict the least recently used
         if storage[conceptId] == nil && storage.count >= maxSize {
@@ -548,6 +719,10 @@ private actor ConceptCache {
         )
     }
 
+    /// Removes the least recently used entry from the cache.
+    ///
+    /// Called automatically when the cache reaches capacity and a new entry
+    /// needs to be added.
     private func evictLeastRecentlyUsed() {
         guard let lruKey = storage.min(by: { $0.value.lastAccessedAt < $1.value.lastAccessedAt })?.key else {
             return
@@ -555,7 +730,9 @@ private actor ConceptCache {
         storage.removeValue(forKey: lruKey)
     }
 
-    /// Returns the current number of cached entries (for testing)
+    /// Returns the current number of cached entries.
+    ///
+    /// Primarily used for testing cache behavior.
     func count() -> Int {
         storage.count
     }
@@ -563,10 +740,17 @@ private actor ConceptCache {
 
 // MARK: - FHIR Data Structures
 
+/// FHIR Parameters resource returned by the `CodeSystem/$lookup` operation.
+///
+/// Contains an array of named parameters with values representing
+/// the concept's properties, designations, and metadata.
+///
+/// - SeeAlso: [FHIR Parameters](https://hl7.org/fhir/R4/parameters.html)
 struct FHIRParameters: Decodable {
     let resourceType: String
     let parameter: [Parameter]?
-    
+
+    /// A single parameter within the Parameters resource.
     struct Parameter: Decodable {
         let name: String
         let valueString: String?
@@ -574,14 +758,16 @@ struct FHIRParameters: Decodable {
         let valueCoding: Coding?
         let part: [Part]?
     }
-    
+
+    /// A nested part within a parameter (used for complex properties).
     struct Part: Decodable {
         let name: String
         let valueString: String?
         let valueCode: String?
         let valueCoding: Coding?
     }
-    
+
+    /// A FHIR Coding data type representing a code from a code system.
     struct Coding: Decodable {
         let system: String?
         let code: String?
@@ -589,16 +775,26 @@ struct FHIRParameters: Decodable {
     }
 }
 
+/// FHIR Bundle resource returned when searching for CodeSystems.
+///
+/// Contains an array of entries, each wrapping a CodeSystem resource
+/// representing a SNOMED CT edition.
+///
+/// - SeeAlso: [FHIR Bundle](https://hl7.org/fhir/R4/bundle.html)
 struct FHIRBundle: Decodable {
     let resourceType: String
     let type: String?
     let entry: [Entry]?
-    
+
+    /// A single entry in the bundle containing a CodeSystem resource.
     struct Entry: Decodable {
         let resource: CodeSystem?
     }
 }
 
+/// FHIR CodeSystem resource representing a SNOMED CT edition.
+///
+/// - SeeAlso: [FHIR CodeSystem](https://hl7.org/fhir/R4/codesystem.html)
 struct CodeSystem: Decodable {
     let resourceType: String
     let url: String?
@@ -608,8 +804,30 @@ struct CodeSystem: Decodable {
     let status: String?
 }
 
+/// Represents a SNOMED CT edition available on the terminology server.
+///
+/// Each edition has a unique system URL (sct or xsct), a version URI
+/// containing the edition module ID, and a human-readable title.
+///
+/// ## Example Editions
+///
+/// - International: `http://snomed.info/sct/900000000000207008`
+/// - Australian: `http://snomed.info/sct/32506021000036107`
+/// - US: `http://snomed.info/sct/731000124108`
 struct SNOMEDEdition {
+    /// The SNOMED CT system URL.
+    ///
+    /// - `http://snomed.info/sct` for official editions
+    /// - `http://snomed.info/xsct` for experimental/extension editions
     let system: String
+
+    /// The full edition version URI including the module ID.
+    ///
+    /// Example: `http://snomed.info/sct/32506021000036107`
     let version: String
+
+    /// Human-readable name of the edition.
+    ///
+    /// Example: "Australian", "United States", "International"
     let title: String
 }
