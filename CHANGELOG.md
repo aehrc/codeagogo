@@ -6,9 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Focus taken when the popup opens to allow easy closing with the escape key
+<<<<<<< HEAD
 ### Changed
 - Popover now takes focus when opened, allowing immediate dismissal with Escape key
 - Focus is restored to the previously active application when the popover closes
+
+=======
+## [0.4.0] - 2026-01
 
 ### Added
 - GitHub Actions release workflow for creating versioned releases
