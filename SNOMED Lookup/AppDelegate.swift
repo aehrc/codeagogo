@@ -55,6 +55,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Invisible window used to anchor the popover near the cursor.
     private let cursorAnchor = CursorAnchorWindow()
 
+    /// The app that was active before showing the popover, for restoring focus.
+    private var previousApp: NSRunningApplication?
+
     /// Called when the application finishes launching.
     ///
     /// Sets up the menu bar, popover, and global hotkey.
@@ -128,13 +131,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             rootView: PopoverView().environmentObject(model)
         )
 
-        // Close the cursor anchor window when the popover closes
+        // Close the cursor anchor window and restore focus when the popover closes
         NotificationCenter.default.addObserver(
             forName: NSPopover.didCloseNotification,
             object: popover,
             queue: .main
         ) { [weak self] _ in
-            self?.cursorAnchor.close()
+            guard let self else { return }
+            Task { @MainActor [self] in
+                self.cursorAnchor.close()
+
+                // Restore focus to the previously active app
+                if let previousApp = self.previousApp {
+                    previousApp.activate()
+                    self.previousApp = nil
+                }
+            }
         }
     }
 
@@ -194,11 +206,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func lookupSelection() {
         let mouse = NSEvent.mouseLocation
 
+        // Capture the currently active app before we take focus
+        previousApp = NSWorkspace.shared.frontmostApplication
+
         Task { @MainActor in
             await model.lookupFromSystemSelection()
 
             if !popover.isShown {
                 cursorAnchor.showPopover(popover, at: mouse, preferredEdge: .maxY)
+
+                // Activate our app and make the popover key so Escape works
+                NSApp.activate(ignoringOtherApps: true)
+                popover.contentViewController?.view.window?.makeKey()
             }
         }
     }

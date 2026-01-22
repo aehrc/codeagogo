@@ -3,6 +3,16 @@ import Combine
 import AppKit
 import Carbon.HIToolbox
 
+/// Constants used by HotKeySettings, accessible from any isolation context.
+private nonisolated enum HotKeyConstants: Sendable {
+    static let keyCodeKey = "hotkey.keyCode"
+    static let modifiersKey = "hotkey.modifiersRaw"
+    // kVK_ANSI_L = 0x25 = 37
+    static let defaultKeyCode: UInt32 = 37
+    // controlKey | optionKey = 0x1000 | 0x0800 = 0x1800 = 6144
+    static let defaultModifiers: UInt32 = 6144
+}
+
 @MainActor
 final class HotKeySettings: ObservableObject {
     static let shared = HotKeySettings()
@@ -10,24 +20,17 @@ final class HotKeySettings: ObservableObject {
     @Published var keyCode: UInt32
     @Published var modifiersRaw: UInt32
 
-    private nonisolated(unsafe) static let keyCodeKey = "hotkey.keyCode"
-    private nonisolated(unsafe) static let modifiersKey = "hotkey.modifiersRaw"
-    // kVK_ANSI_L = 0x25 = 37
-    private nonisolated(unsafe) static let defaultKeyCode: UInt32 = 37
-    // controlKey | optionKey = 0x1000 | 0x0800 = 0x1800 = 6144
-    private nonisolated(unsafe) static let defaultModifiers: UInt32 = 6144
-
     private init() {
-        let savedKey = UserDefaults.standard.object(forKey: Self.keyCodeKey) as? Int
-        let savedMods = UserDefaults.standard.object(forKey: Self.modifiersKey) as? Int
+        let savedKey = UserDefaults.standard.object(forKey: HotKeyConstants.keyCodeKey) as? Int
+        let savedMods = UserDefaults.standard.object(forKey: HotKeyConstants.modifiersKey) as? Int
 
-        self.keyCode = UInt32(savedKey ?? Int(Self.defaultKeyCode))
-        self.modifiersRaw = UInt32(savedMods ?? Int(Self.defaultModifiers))
+        self.keyCode = UInt32(savedKey ?? Int(HotKeyConstants.defaultKeyCode))
+        self.modifiersRaw = UInt32(savedMods ?? Int(HotKeyConstants.defaultModifiers))
     }
 
     func save() {
-        UserDefaults.standard.set(Int(keyCode), forKey: Self.keyCodeKey)
-        UserDefaults.standard.set(Int(modifiersRaw), forKey: Self.modifiersKey)
+        UserDefaults.standard.set(Int(keyCode), forKey: HotKeyConstants.keyCodeKey)
+        UserDefaults.standard.set(Int(modifiersRaw), forKey: HotKeyConstants.modifiersKey)
     }
 
     var modifiers: NSEvent.ModifierFlags {
@@ -41,14 +44,14 @@ final class HotKeySettings: ObservableObject {
 
     /// Thread-safe access to key code for non-MainActor contexts.
     nonisolated static var currentKeyCode: UInt32 {
-        let saved = UserDefaults.standard.object(forKey: keyCodeKey) as? Int
-        return UInt32(saved ?? Int(defaultKeyCode))
+        let saved = UserDefaults.standard.object(forKey: HotKeyConstants.keyCodeKey) as? Int
+        return UInt32(saved ?? Int(HotKeyConstants.defaultKeyCode))
     }
 
     /// Thread-safe access to modifiers for non-MainActor contexts.
     nonisolated static var currentModifiers: NSEvent.ModifierFlags {
-        let saved = UserDefaults.standard.object(forKey: modifiersKey) as? Int
-        let raw = UInt32(saved ?? Int(defaultModifiers))
+        let saved = UserDefaults.standard.object(forKey: HotKeyConstants.modifiersKey) as? Int
+        let raw = UInt32(saved ?? Int(HotKeyConstants.defaultModifiers))
         var f: NSEvent.ModifierFlags = []
         if (raw & carbonModifiers(from: [.control])) != 0 { f.insert(.control) }
         if (raw & carbonModifiers(from: [.option])) != 0 { f.insert(.option) }
