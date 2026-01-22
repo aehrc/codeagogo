@@ -15,7 +15,9 @@ Download the latest `SNOMED-Lookup-macOS.zip` from the project’s **Releases** 
 
 ### 2. Unzip and install
 1. Double-click the downloaded zip file to unzip it.
-2. Drag **SNOMED Lookup.app** into your **Applications** folder.
+2. **Important**: Drag **SNOMED Lookup.app** into your **Applications** folder.
+   - Do NOT run the app from Downloads - it will not work correctly.
+   - Accessibility permissions are tied to the app's location.
 
 ---
 
@@ -81,7 +83,20 @@ Then open the app normally. You only need to do this once.
 - Check Accessibility permission is enabled
 - Try quitting and reopening the app
 
-### “Not a SNOMED CT concept ID” message
+### Always shows "Not a SNOMED CT concept ID"
+
+This usually means the app cannot capture your selection. Common causes:
+
+1. **App not in /Applications**: The app must be run from `/Applications`, not from Downloads or other locations. Accessibility permissions are tied to the app's location.
+   - Move the app to `/Applications`
+   - Remove old entries from Accessibility permissions
+   - Re-add the app from its new location
+
+2. **Accessibility permission not granted**: Check System Settings → Privacy & Security → Accessibility
+
+3. **Stale permission**: If you moved the app, you need to re-grant Accessibility permission from the new location.
+
+### "Not a SNOMED CT concept ID" message
 - Ensure you have selected the numeric concept ID itself
 - Some applications may require you to click once more to ensure the text selection is active
 
