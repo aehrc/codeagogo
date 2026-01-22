@@ -143,10 +143,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// A Combine subscription updates the hotkey whenever settings change,
     /// allowing live updates without app restart.
     private func setupHotKey() {
-        // Initial registration with current settings
+        // Initial registration with current settings (using thread-safe accessors)
         hotKey = GlobalHotKey(
-            keyCode: hotKeySettings.keyCode,
-            modifiers: hotKeySettings.modifiers
+            keyCode: HotKeySettings.currentKeyCode,
+            modifiers: HotKeySettings.currentModifiers
         ) { [weak self] in
             self?.lookupSelection()
         }
@@ -155,13 +155,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Update hotkey live when settings change
         Publishers.CombineLatest(hotKeySettings.$keyCode, hotKeySettings.$modifiersRaw)
             .dropFirst()  // Skip initial value emission
-            .sink { [weak self] _, _ in
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newKeyCode, newModifiersRaw in
                 guard let self else { return }
                 self.hotKeySettings.save()
-                self.hotKey?.update(
-                    keyCode: self.hotKeySettings.keyCode,
-                    modifiers: self.hotKeySettings.modifiers
-                )
+                // Convert raw modifiers to NSEvent.ModifierFlags
+                var mods: NSEvent.ModifierFlags = []
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.control])) != 0 { mods.insert(.control) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.option])) != 0 { mods.insert(.option) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
+                self.hotKey?.update(keyCode: newKeyCode, modifiers: mods)
             }
             .store(in: &cancellables)
     }

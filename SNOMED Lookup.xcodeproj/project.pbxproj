@@ -8,6 +8,13 @@
 
 /* Begin PBXBuildFile section */
 		1C5364892F1DE6670056E6F3 /* FHIROptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C5364882F1DE6670056E6F3 /* FHIROptions.swift */; };
+		1C57F14E2F20C47F00123629 /* PRIVACY.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C57F14C2F20C47F00123629 /* PRIVACY.md */; };
+		1C57F14F2F20C47F00123629 /* INSTALL.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C57F14A2F20C47F00123629 /* INSTALL.md */; };
+		1C57F1502F20C47F00123629 /* package-zip.sh in Resources */ = {isa = PBXBuildFile; fileRef = 1C57F14B2F20C47F00123629 /* package-zip.sh */; };
+		1C57F1512F20C47F00123629 /* CONTRIBUTING.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C57F1492F20C47F00123629 /* CONTRIBUTING.md */; };
+		1C57F1522F20C47F00123629 /* ARCHITECTURE.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C57F1472F20C47F00123629 /* ARCHITECTURE.md */; };
+		1C57F1532F20C47F00123629 /* CHANGELOG.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C57F1482F20C47F00123629 /* CHANGELOG.md */; };
+		1C57F1542F20C47F00123629 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C57F14D2F20C47F00123629 /* README.md */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -23,6 +30,13 @@
 /* Begin PBXFileReference section */
 		1C305A7A2F16318300F58379 /* SNOMED Lookup.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "SNOMED Lookup.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		1C5364882F1DE6670056E6F3 /* FHIROptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FHIROptions.swift; sourceTree = "<group>"; };
+		1C57F1472F20C47F00123629 /* ARCHITECTURE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ARCHITECTURE.md; sourceTree = "<group>"; };
+		1C57F1482F20C47F00123629 /* CHANGELOG.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CHANGELOG.md; sourceTree = "<group>"; };
+		1C57F1492F20C47F00123629 /* CONTRIBUTING.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CONTRIBUTING.md; sourceTree = "<group>"; };
+		1C57F14A2F20C47F00123629 /* INSTALL.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = INSTALL.md; sourceTree = "<group>"; };
+		1C57F14B2F20C47F00123629 /* package-zip.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "package-zip.sh"; sourceTree = "<group>"; };
+		1C57F14C2F20C47F00123629 /* PRIVACY.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PRIVACY.md; sourceTree = "<group>"; };
+		1C57F14D2F20C47F00123629 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		1CTEST0012F20000100000002 /* SNOMED LookupTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "SNOMED LookupTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -60,6 +74,13 @@
 		1C305A712F16318300F58379 = {
 			isa = PBXGroup;
 			children = (
+				1C57F1472F20C47F00123629 /* ARCHITECTURE.md */,
+				1C57F1482F20C47F00123629 /* CHANGELOG.md */,
+				1C57F1492F20C47F00123629 /* CONTRIBUTING.md */,
+				1C57F14A2F20C47F00123629 /* INSTALL.md */,
+				1C57F14B2F20C47F00123629 /* package-zip.sh */,
+				1C57F14C2F20C47F00123629 /* PRIVACY.md */,
+				1C57F14D2F20C47F00123629 /* README.md */,
 				1C305A7C2F16318300F58379 /* SNOMED Lookup */,
 				1CTEST0012F20000100000003 /* SNOMED LookupTests */,
 				1C305A7B2F16318300F58379 /* Products */,
@@ -168,6 +189,13 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1C57F14E2F20C47F00123629 /* PRIVACY.md in Resources */,
+				1C57F14F2F20C47F00123629 /* INSTALL.md in Resources */,
+				1C57F1502F20C47F00123629 /* package-zip.sh in Resources */,
+				1C57F1512F20C47F00123629 /* CONTRIBUTING.md in Resources */,
+				1C57F1522F20C47F00123629 /* ARCHITECTURE.md in Resources */,
+				1C57F1532F20C47F00123629 /* CHANGELOG.md in Resources */,
+				1C57F1542F20C47F00123629 /* README.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

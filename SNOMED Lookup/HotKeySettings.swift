@@ -10,24 +10,22 @@ final class HotKeySettings: ObservableObject {
     @Published var keyCode: UInt32
     @Published var modifiersRaw: UInt32
 
-    private let keyCodeKey = "hotkey.keyCode"
-    private let modifiersKey = "hotkey.modifiersRaw"
+    private static let keyCodeKey = "hotkey.keyCode"
+    private static let modifiersKey = "hotkey.modifiersRaw"
+    private static let defaultKeyCode = UInt32(kVK_ANSI_L)
+    private static let defaultModifiers: UInt32 = carbonModifiers(from: [.control, .option])
 
     private init() {
-        // Default: Control + Option + L
-        let defaultKey = UInt32(kVK_ANSI_L)
-        let defaultMods: UInt32 = Self.carbonModifiers(from: [.control, .option])
+        let savedKey = UserDefaults.standard.object(forKey: Self.keyCodeKey) as? Int
+        let savedMods = UserDefaults.standard.object(forKey: Self.modifiersKey) as? Int
 
-        let savedKey = UserDefaults.standard.object(forKey: keyCodeKey) as? Int
-        let savedMods = UserDefaults.standard.object(forKey: modifiersKey) as? Int
-
-        self.keyCode = UInt32(savedKey ?? Int(defaultKey))
-        self.modifiersRaw = UInt32(savedMods ?? Int(defaultMods))
+        self.keyCode = UInt32(savedKey ?? Int(Self.defaultKeyCode))
+        self.modifiersRaw = UInt32(savedMods ?? Int(Self.defaultModifiers))
     }
 
     func save() {
-        UserDefaults.standard.set(Int(keyCode), forKey: keyCodeKey)
-        UserDefaults.standard.set(Int(modifiersRaw), forKey: modifiersKey)
+        UserDefaults.standard.set(Int(keyCode), forKey: Self.keyCodeKey)
+        UserDefaults.standard.set(Int(modifiersRaw), forKey: Self.modifiersKey)
     }
 
     var modifiers: NSEvent.ModifierFlags {
@@ -36,6 +34,24 @@ final class HotKeySettings: ObservableObject {
         if (modifiersRaw & Self.carbonModifiers(from: [.option])) != 0 { f.insert(.option) }
         if (modifiersRaw & Self.carbonModifiers(from: [.command])) != 0 { f.insert(.command) }
         if (modifiersRaw & Self.carbonModifiers(from: [.shift])) != 0 { f.insert(.shift) }
+        return f
+    }
+
+    /// Thread-safe access to key code for non-MainActor contexts.
+    nonisolated static var currentKeyCode: UInt32 {
+        let saved = UserDefaults.standard.object(forKey: keyCodeKey) as? Int
+        return UInt32(saved ?? Int(defaultKeyCode))
+    }
+
+    /// Thread-safe access to modifiers for non-MainActor contexts.
+    nonisolated static var currentModifiers: NSEvent.ModifierFlags {
+        let saved = UserDefaults.standard.object(forKey: modifiersKey) as? Int
+        let raw = UInt32(saved ?? Int(defaultModifiers))
+        var f: NSEvent.ModifierFlags = []
+        if (raw & carbonModifiers(from: [.control])) != 0 { f.insert(.control) }
+        if (raw & carbonModifiers(from: [.option])) != 0 { f.insert(.option) }
+        if (raw & carbonModifiers(from: [.command])) != 0 { f.insert(.command) }
+        if (raw & carbonModifiers(from: [.shift])) != 0 { f.insert(.shift) }
         return f
     }
 

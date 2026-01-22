@@ -173,7 +173,8 @@ enum OntoserverError: LocalizedError {
 /// async/await, and the cache is protected by a Swift actor.
 final class OntoserverClient {
     /// The base URL for FHIR API requests, read from user settings.
-    private var baseURL: URL { FHIROptions.shared.baseURL }
+    /// Uses the thread-safe static accessor to avoid MainActor isolation issues.
+    private var baseURL: URL { FHIROptions.currentBaseURL }
 
     /// The URL session used for network requests.
     private let session: URLSession
