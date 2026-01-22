@@ -1,5 +1,6 @@
 # SNOMED Lookup
 
+![CI](https://github.com/aehrc/snomed-lookup/actions/workflows/ci.yml/badge.svg)
 ![platform](https://img.shields.io/badge/platform-macOS%2013%2B-blue)
 ![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)
 ![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-red)
@@ -71,7 +72,9 @@ For detailed installation instructions, see **[INSTALL.md](INSTALL.md)**.
 
 ### Quick Start
 
-1. Download the latest `SNOMED-Lookup-macOS-Release.zip` from [Releases](../../releases)
+1. Download the latest build:
+   - **Releases**: Download from [Releases](../../releases) (stable)
+   - **CI Builds**: Download from [Actions](../../actions) artifacts (latest main branch)
 2. Extract and move `SNOMED Lookup.app` to `/Applications`
 3. Right-click the app and select **Open** (required for first launch)
 4. Grant **Accessibility** permission when prompted

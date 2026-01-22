@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- GitHub Actions CI/CD workflow for automated builds and tests
+- Downloadable build artifacts from CI (macOS app bundle)
 - Comprehensive unit and integration test suite (63 tests)
 - LRU cache with configurable size limit (100 entries)
 - Retry logic with exponential backoff for transient network failures

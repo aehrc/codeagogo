@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  SCHEME: "SNOMED Lookup"
+  DESTINATION: "platform=macOS"
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Build
+        working-directory: "SNOMED Lookup"
+        run: |
+          xcodebuild build \
+            -scheme "$SCHEME" \
+            -destination "$DESTINATION" \
+            -configuration Release \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty
+
+      - name: Run Tests
+        working-directory: "SNOMED Lookup"
+        run: |
+          xcodebuild test \
+            -scheme "$SCHEME" \
+            -destination "$DESTINATION" \
+            -configuration Debug \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty
+
+  build-artifact:
+    name: Build Release Artifact
+    runs-on: macos-14
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+
+      - name: Build Release
+        working-directory: "SNOMED Lookup"
+        run: |
+          xcodebuild build \
+            -scheme "$SCHEME" \
+            -destination "$DESTINATION" \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Create Artifact
+        working-directory: "SNOMED Lookup"
+        run: |
+          mkdir -p artifact
+          cp -R "build/Build/Products/Release/SNOMED Lookup.app" artifact/
+          cd artifact
+          zip -r "SNOMED-Lookup-macOS.zip" "SNOMED Lookup.app"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SNOMED-Lookup-macOS
+          path: "SNOMED Lookup/artifact/SNOMED-Lookup-macOS.zip"
+          retention-days: 30
