@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- GitHub Actions release workflow for creating versioned releases
 - GitHub Actions CI/CD workflow for automated builds and tests
 - Downloadable build artifacts from CI (macOS app bundle)
 - Comprehensive unit and integration test suite (63 tests)

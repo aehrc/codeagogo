@@ -235,10 +235,23 @@ SNOMED Lookup/
 
 ### Creating a Release
 
-```bash
-# Build and package for distribution
-./scripts/package-zip.sh
+Releases are created via GitHub Actions:
 
+1. Go to **Actions** → **Release** workflow
+2. Click **Run workflow**
+3. Enter the version number (e.g., `1.4.0`)
+4. Click **Run workflow**
+
+The workflow will:
+- Update `CHANGELOG.md` (move Unreleased to new version)
+- Update the Xcode project version (for About box)
+- Commit and tag the release
+- Build the Release configuration
+- Create a GitHub Release with the artifact and changelog
+
+**Manual build** (for local testing):
+```bash
+./scripts/package-zip.sh
 # Output: dist/SNOMED-Lookup-macOS-Release.zip
 ```
 
