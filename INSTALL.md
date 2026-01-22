@@ -64,6 +64,18 @@ This is the same permission required by tools such as Raycast and Alfred.
 
 ## Troubleshooting
 
+### "App is damaged and can't be opened"
+
+This error occurs because the app is not signed with an Apple Developer certificate. macOS quarantines downloaded apps and blocks unsigned ones.
+
+**Fix**: Remove the quarantine attribute using Terminal:
+
+```bash
+xattr -cr "/Applications/SNOMED Lookup.app"
+```
+
+Then open the app normally. You only need to do this once.
+
 ### Nothing happens when I press the hotkey
 - Ensure **SNOMED Lookup** is running
 - Check Accessibility permission is enabled
