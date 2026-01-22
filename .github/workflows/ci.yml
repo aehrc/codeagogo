@@ -34,6 +34,7 @@ jobs:
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             ENABLE_HARDENED_RUNTIME=NO \
+            ENABLE_APP_SANDBOX=NO \
             | xcpretty
 
       - name: Run Tests
@@ -45,6 +46,7 @@ jobs:
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             ENABLE_HARDENED_RUNTIME=NO \
+            ENABLE_APP_SANDBOX=NO \
             | xcpretty
 
   build-artifact:
@@ -69,7 +71,8 @@ jobs:
             -derivedDataPath build \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
-            ENABLE_HARDENED_RUNTIME=NO
+            ENABLE_HARDENED_RUNTIME=NO \
+            ENABLE_APP_SANDBOX=NO
 
       - name: Create Artifact
         run: |
