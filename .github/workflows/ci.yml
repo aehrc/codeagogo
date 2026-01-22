@@ -26,7 +26,6 @@ jobs:
         run: xcodebuild -version
 
       - name: Build
-        working-directory: "SNOMED Lookup"
         run: |
           xcodebuild build \
             -scheme "$SCHEME" \
@@ -38,7 +37,6 @@ jobs:
             | xcpretty
 
       - name: Run Tests
-        working-directory: "SNOMED Lookup"
         run: |
           xcodebuild test \
             -scheme "$SCHEME" \
@@ -63,7 +61,6 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
 
       - name: Build Release
-        working-directory: "SNOMED Lookup"
         run: |
           xcodebuild build \
             -scheme "$SCHEME" \
@@ -75,7 +72,6 @@ jobs:
             CODE_SIGNING_ALLOWED=NO
 
       - name: Create Artifact
-        working-directory: "SNOMED Lookup"
         run: |
           mkdir -p artifact
           cp -R "build/Build/Products/Release/SNOMED Lookup.app" artifact/
@@ -86,5 +82,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SNOMED-Lookup-macOS
-          path: "SNOMED Lookup/artifact/SNOMED-Lookup-macOS.zip"
+          path: artifact/SNOMED-Lookup-macOS.zip
           retention-days: 30
