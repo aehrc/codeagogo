@@ -67,7 +67,7 @@ jobs:
           xcodebuild build \
             -scheme "$SCHEME" \
             -destination "$DESTINATION" \
-            -configuration Release \
+            -configuration Debug \
             -derivedDataPath build \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
@@ -77,7 +77,7 @@ jobs:
       - name: Create Artifact
         run: |
           mkdir -p artifact
-          cp -R "build/Build/Products/Release/SNOMED Lookup.app" artifact/
+          cp -R "build/Build/Products/Debug/SNOMED Lookup.app" artifact/
           cd artifact
           zip -r "SNOMED-Lookup-macOS.zip" "SNOMED Lookup.app"
 
