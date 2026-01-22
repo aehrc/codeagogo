@@ -2,7 +2,7 @@ import Foundation
 import Combine
 
 /// Constants used by FHIROptions, accessible from any isolation context.
-private nonisolated enum FHIRConstants: Sendable {
+private enum FHIRConstants: Sendable {
     static let endpointKey = "fhir.baseURL"
     static let defaultEndpoint = "https://tx.ontoserver.csiro.au/fhir"
 }

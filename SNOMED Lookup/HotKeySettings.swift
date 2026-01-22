@@ -4,7 +4,7 @@ import AppKit
 import Carbon.HIToolbox
 
 /// Constants used by HotKeySettings, accessible from any isolation context.
-private nonisolated enum HotKeyConstants: Sendable {
+private enum HotKeyConstants: Sendable {
     static let keyCodeKey = "hotkey.keyCode"
     static let modifiersKey = "hotkey.modifiersRaw"
     // kVK_ANSI_L = 0x25 = 37
