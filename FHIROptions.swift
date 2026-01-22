@@ -5,8 +5,8 @@ import Combine
 final class FHIROptions: ObservableObject {
     static let shared = FHIROptions()
 
-    private static let endpointKey = "fhir.baseURL"
-    private static let defaultEndpoint = "https://tx.ontoserver.csiro.au/fhir"
+    private nonisolated(unsafe) static let endpointKey = "fhir.baseURL"
+    private nonisolated(unsafe) static let defaultEndpoint = "https://tx.ontoserver.csiro.au/fhir"
 
     @Published var baseURLString: String
 

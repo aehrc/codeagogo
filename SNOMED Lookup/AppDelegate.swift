@@ -32,6 +32,7 @@ import Carbon.HIToolbox
 ///
 /// The status item displays a magnifying glass icon. Right-clicking shows
 /// a menu with "Lookup Selection" and "Quit" options.
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The menu bar status item displaying the app icon.
     private var statusItem: NSStatusItem!
