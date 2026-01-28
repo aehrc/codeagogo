@@ -4,7 +4,7 @@ All notable changes to SNOMED Lookup are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.6.0] - 2026-01
 
 ### Added
 - **Concept Search and Insert feature**: New global hotkey (Control+Option+S) opens a floating search panel
