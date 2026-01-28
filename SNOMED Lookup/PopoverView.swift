@@ -13,6 +13,7 @@ struct PopoverView: View {
                 if model.isLoading {
                     ProgressView()
                         .scaleEffect(0.8)
+                        .accessibilityIdentifier("popover.loading")
                         .accessibilityLabel("Loading concept data")
                 }
             }
@@ -21,15 +22,21 @@ struct PopoverView: View {
                 Text(err)
                     .foregroundStyle(.red)
                     .font(.callout)
+                    .accessibilityIdentifier("popover.error")
                     .accessibilityLabel("Error: \(err)")
             }
 
             Group {
                 row("Concept ID", model.result?.conceptId ?? "—")
+                    .accessibilityIdentifier("popover.conceptId")
                 row("FSN", model.result?.fsn ?? "—")
+                    .accessibilityIdentifier("popover.fsn")
                 row("PT", model.result?.pt ?? "—")
+                    .accessibilityIdentifier("popover.pt")
                 row("Status", model.result?.activeText ?? "—")
+                    .accessibilityIdentifier("popover.status")
                 row("Edition", model.result?.branch ?? "—")
+                    .accessibilityIdentifier("popover.edition")
             }
 
             HStack {

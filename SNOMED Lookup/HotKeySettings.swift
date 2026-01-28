@@ -90,6 +90,8 @@ final class HotKeySettings: ObservableObject {
         case kVK_ANSI_K: return "K"
         case kVK_ANSI_Y: return "Y"
         case kVK_ANSI_U: return "U"
+        case kVK_ANSI_S: return "S"
+        case kVK_ANSI_F: return "F"
         default: return "?"
         }
     }

@@ -43,11 +43,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The view model that coordinates lookups and holds results.
     private let model = LookupViewModel()
 
-    /// Shared settings for the global hotkey configuration.
+    /// Shared settings for the lookup hotkey configuration.
     private let hotKeySettings = HotKeySettings.shared
 
-    /// The currently registered global hotkey handler.
+    /// Shared settings for the search hotkey configuration.
+    private let searchHotKeySettings = SearchHotKeySettings.shared
+
+    /// The currently registered global hotkey handler for lookup.
     private var hotKey: GlobalHotKey?
+
+    /// The currently registered global hotkey handler for search.
+    private var searchHotKey: GlobalHotKey?
+
+    /// The search panel controller for the concept search feature.
+    private let searchPanel = SearchPanelController()
 
     /// Active Combine subscriptions for settings observation.
     private var cancellables = Set<AnyCancellable>()
@@ -62,11 +71,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///
     /// Sets up the menu bar, popover, and global hotkey.
     func applicationDidFinishLaunching(_ notification: Notification) {
-        enforceSingleInstance()
+        if !ProcessInfo.processInfo.arguments.contains("--ui-testing") {
+            enforceSingleInstance()
+        }
 
         setupMenuBar()
         setupPopover()
         setupHotKey()
+        setupSearchHotKey()
     }
 
     /// Handles reopen events (e.g., clicking the Dock icon).
@@ -115,6 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Lookup Selection", action: #selector(lookupSelection), keyEquivalent: "l"))
+        menu.addItem(NSMenuItem(title: "Search Concepts...", action: #selector(showSearchPanel), keyEquivalent: "s"))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
         statusItem.menu = menu
@@ -181,6 +194,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.hotKey?.update(keyCode: newKeyCode, modifiers: mods)
             }
             .store(in: &cancellables)
+    }
+
+    /// Registers the search hotkey and sets up observation for settings changes.
+    ///
+    /// The search hotkey opens a floating panel for searching and inserting
+    /// SNOMED CT concepts. Settings changes take effect immediately.
+    private func setupSearchHotKey() {
+        // Initial registration with current settings (using thread-safe accessors)
+        searchHotKey = GlobalHotKey(
+            keyCode: SearchHotKeySettings.currentKeyCode,
+            modifiers: SearchHotKeySettings.currentModifiers,
+            id: 2  // Use id=2 to distinguish from lookup hotkey (id=1)
+        ) { [weak self] in
+            self?.showSearchPanel()
+        }
+        searchHotKey?.start()
+
+        // Update hotkey live when settings change
+        Publishers.CombineLatest(searchHotKeySettings.$keyCode, searchHotKeySettings.$modifiersRaw)
+            .dropFirst()  // Skip initial value emission
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newKeyCode, newModifiersRaw in
+                guard let self else { return }
+                self.searchHotKeySettings.save()
+                // Convert raw modifiers to NSEvent.ModifierFlags
+                var mods: NSEvent.ModifierFlags = []
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.control])) != 0 { mods.insert(.control) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.option])) != 0 { mods.insert(.option) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
+                self.searchHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Shows the SNOMED CT search panel near the cursor.
+    @objc private func showSearchPanel() {
+        let mouse = NSEvent.mouseLocation
+        searchPanel.show(at: mouse)
     }
 
     /// Toggles the popover visibility when clicking the menu bar icon.

@@ -41,6 +41,17 @@
                ReferencedContainer = "container:SNOMED Lookup.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "1C64E8F32F29C41D00344AA8"
+               BuildableName = "SNOMED LookupUITests.xctest"
+               BlueprintName = "SNOMED LookupUITests"
+               ReferencedContainer = "container:SNOMED Lookup.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

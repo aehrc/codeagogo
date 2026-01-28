@@ -55,6 +55,9 @@ final class GlobalHotKey {
     /// Carbon modifier flags (converted from `NSEvent.ModifierFlags`).
     private var modifiers: UInt32
 
+    /// Unique identifier for this hotkey (allows multiple hotkeys to coexist).
+    private let hotKeyId: UInt32
+
     /// Creates a new global hotkey handler.
     ///
     /// The hotkey is not active until `start()` is called.
@@ -62,10 +65,13 @@ final class GlobalHotKey {
     /// - Parameters:
     ///   - keyCode: The virtual key code for the hotkey
     ///   - modifiers: The modifier keys required (Control, Option, Command, Shift)
+    ///   - id: Unique identifier for this hotkey (default: 1). Use different IDs
+    ///         for multiple hotkeys (e.g., 1 for lookup, 2 for search).
     ///   - handler: The closure to execute when the hotkey is pressed
-    init(keyCode: UInt32, modifiers: NSEvent.ModifierFlags, handler: @escaping () -> Void) {
+    init(keyCode: UInt32, modifiers: NSEvent.ModifierFlags, id: UInt32 = 1, handler: @escaping () -> Void) {
         self.keyCode = keyCode
         self.modifiers = HotKeySettings.carbonModifiers(from: modifiers)
+        self.hotKeyId = id
         self.handler = handler
     }
 
@@ -86,15 +92,32 @@ final class GlobalHotKey {
         var eventSpec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
 
         var handlerRef: EventHandlerRef?
-        InstallEventHandler(GetEventDispatcherTarget(), { _, _, userData in
-            guard let userData else { return noErr }
+        InstallEventHandler(GetEventDispatcherTarget(), { _, event, userData -> OSStatus in
+            guard let userData, let event else { return OSStatus(eventNotHandledErr) }
             let me = Unmanaged<GlobalHotKey>.fromOpaque(userData).takeUnretainedValue()
+
+            // Extract the hotkey ID from the event to match against this instance
+            var firedKeyID = EventHotKeyID()
+            let status = GetEventParameter(
+                event,
+                EventParamName(kEventParamDirectObject),
+                EventParamType(typeEventHotKeyID),
+                nil,
+                MemoryLayout<EventHotKeyID>.size,
+                nil,
+                &firedKeyID
+            )
+            guard status == noErr else { return OSStatus(eventNotHandledErr) }
+
+            // Only handle if the ID matches this instance
+            guard firedKeyID.id == me.hotKeyId else { return OSStatus(eventNotHandledErr) }
+
             me.handler?()
             return noErr
         }, 1, &eventSpec, UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque()), &handlerRef)
         eventHandlerRef = handlerRef
 
-        let hotKeyID = EventHotKeyID(signature: OSType("SNMD".fourCharCodeValue), id: 1)
+        let hotKeyID = EventHotKeyID(signature: OSType("SNMD".fourCharCodeValue), id: hotKeyId)
         RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetEventDispatcherTarget(), 0, &hotKeyRef)
     }
 

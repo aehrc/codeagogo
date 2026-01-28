@@ -172,6 +172,31 @@ final class SystemSelectionReader {
         return true
     }
 
+    /// Simulates a Cmd+V keystroke to trigger a paste operation.
+    ///
+    /// This uses CoreGraphics to create and post keyboard events to the
+    /// system event tap. The events are sent to whichever application
+    /// is currently frontmost.
+    ///
+    /// - Returns: `true` if the events were successfully created and posted,
+    ///            `false` if event creation failed (usually due to missing
+    ///            Accessibility permission)
+    func sendCmdV() -> Bool {
+        guard
+            let src = CGEventSource(stateID: .combinedSessionState),
+            let keyDown = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: true),
+            let keyUp = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: false)
+        else { return false }
+
+        keyDown.flags = .maskCommand
+        keyUp.flags = .maskCommand
+
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+
+        return true
+    }
+
     /// Converts a string to a debug representation with visible whitespace.
     ///
     /// Used for debug logging to make whitespace characters visible:

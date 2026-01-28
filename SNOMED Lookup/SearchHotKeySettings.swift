@@ -1,0 +1,117 @@
+import Foundation
+import Combine
+import AppKit
+import Carbon.HIToolbox
+
+/// Constants used by SearchHotKeySettings, accessible from any isolation context.
+private enum SearchHotKeyConstants: Sendable {
+    static let keyCodeKey = "searchHotkey.keyCode"
+    static let modifiersKey = "searchHotkey.modifiersRaw"
+    // kVK_ANSI_S = 0x01 = 1
+    static let defaultKeyCode: UInt32 = 1
+    // controlKey | optionKey = 0x1000 | 0x0800 = 0x1800 = 6144
+    static let defaultModifiers: UInt32 = 6144
+}
+
+/// Manages the global hotkey configuration for the search panel.
+///
+/// `SearchHotKeySettings` follows the same pattern as `HotKeySettings` but
+/// uses different UserDefaults keys. The default hotkey is Control+Option+S.
+///
+/// ## Thread Safety
+///
+/// This class is marked `@MainActor` and should be accessed from the main
+/// thread. Use the static thread-safe accessors for non-MainActor contexts.
+///
+/// ## Usage
+///
+/// ```swift
+/// let settings = SearchHotKeySettings.shared
+///
+/// // Get current settings
+/// let code = settings.keyCode
+/// let mods = settings.modifiers
+///
+/// // Update settings
+/// settings.keyCode = UInt32(kVK_ANSI_F)
+/// settings.save()
+/// ```
+@MainActor
+final class SearchHotKeySettings: ObservableObject {
+    /// Shared singleton instance.
+    static let shared = SearchHotKeySettings()
+
+    /// The virtual key code for the search hotkey.
+    @Published var keyCode: UInt32
+
+    /// The Carbon modifier mask (Control, Option, Command, Shift).
+    @Published var modifiersRaw: UInt32
+
+    private init() {
+        let savedKey = UserDefaults.standard.object(forKey: SearchHotKeyConstants.keyCodeKey) as? Int
+        let savedMods = UserDefaults.standard.object(forKey: SearchHotKeyConstants.modifiersKey) as? Int
+
+        self.keyCode = UInt32(savedKey ?? Int(SearchHotKeyConstants.defaultKeyCode))
+        self.modifiersRaw = UInt32(savedMods ?? Int(SearchHotKeyConstants.defaultModifiers))
+    }
+
+    /// Persists the current settings to UserDefaults.
+    func save() {
+        UserDefaults.standard.set(Int(keyCode), forKey: SearchHotKeyConstants.keyCodeKey)
+        UserDefaults.standard.set(Int(modifiersRaw), forKey: SearchHotKeyConstants.modifiersKey)
+    }
+
+    /// The current modifiers as NSEvent.ModifierFlags.
+    var modifiers: NSEvent.ModifierFlags {
+        var f: NSEvent.ModifierFlags = []
+        if (modifiersRaw & HotKeySettings.carbonModifiers(from: [.control])) != 0 { f.insert(.control) }
+        if (modifiersRaw & HotKeySettings.carbonModifiers(from: [.option])) != 0 { f.insert(.option) }
+        if (modifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { f.insert(.command) }
+        if (modifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { f.insert(.shift) }
+        return f
+    }
+
+    /// Thread-safe access to key code for non-MainActor contexts.
+    nonisolated static var currentKeyCode: UInt32 {
+        let saved = UserDefaults.standard.object(forKey: SearchHotKeyConstants.keyCodeKey) as? Int
+        return UInt32(saved ?? Int(SearchHotKeyConstants.defaultKeyCode))
+    }
+
+    /// Thread-safe access to modifiers for non-MainActor contexts.
+    nonisolated static var currentModifiers: NSEvent.ModifierFlags {
+        let saved = UserDefaults.standard.object(forKey: SearchHotKeyConstants.modifiersKey) as? Int
+        let raw = UInt32(saved ?? Int(SearchHotKeyConstants.defaultModifiers))
+        var f: NSEvent.ModifierFlags = []
+        if (raw & HotKeySettings.carbonModifiers(from: [.control])) != 0 { f.insert(.control) }
+        if (raw & HotKeySettings.carbonModifiers(from: [.option])) != 0 { f.insert(.option) }
+        if (raw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { f.insert(.command) }
+        if (raw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { f.insert(.shift) }
+        return f
+    }
+
+    /// Human-readable description of the current hotkey (e.g., "Control-Option-S").
+    var hotkeyDescription: String {
+        var parts: [String] = []
+
+        if modifiers.contains(.control) { parts.append("Control") }
+        if modifiers.contains(.option) { parts.append("Option") }
+        if modifiers.contains(.shift) { parts.append("Shift") }
+        if modifiers.contains(.command) { parts.append("Command") }
+
+        parts.append(keyName(for: keyCode))
+
+        return parts.joined(separator: "-")
+    }
+
+    private func keyName(for code: UInt32) -> String {
+        switch Int(code) {
+        case kVK_ANSI_S: return "S"
+        case kVK_ANSI_L: return "L"
+        case kVK_ANSI_K: return "K"
+        case kVK_ANSI_Y: return "Y"
+        case kVK_ANSI_U: return "U"
+        case kVK_ANSI_F: return "F"
+        default: return "?"
+        }
+    }
+}

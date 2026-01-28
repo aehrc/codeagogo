@@ -128,6 +128,39 @@ enum OntoserverError: LocalizedError {
     }
 }
 
+// MARK: - ConceptSearching Protocol
+
+/// Protocol for searching SNOMED CT concepts and retrieving editions.
+///
+/// Used by `SearchViewModel` for dependency injection and testability.
+/// The default implementation is `OntoserverClient`.
+///
+/// Marked `Sendable` to allow use across actor boundaries.
+protocol ConceptSearching: Sendable {
+    /// Searches for SNOMED CT concepts matching a text filter.
+    ///
+    /// - Parameters:
+    ///   - filter: The search text to match against concept terms
+    ///   - editionURI: Optional edition URI to limit search; nil = all editions
+    ///   - count: Maximum number of results to return
+    /// - Returns: Array of matching concepts
+    /// - Throws: Network or parsing errors
+    func searchConcepts(filter: String, editionURI: String?, count: Int) async throws -> [SearchResult]
+
+    /// Returns all available SNOMED CT editions from the server.
+    ///
+    /// - Returns: Array of available editions
+    /// - Throws: Network or parsing errors
+    func getAvailableEditions() async throws -> [SNOMEDEdition]
+}
+
+extension ConceptSearching {
+    /// Searches with a default count of 30.
+    func searchConcepts(filter: String, editionURI: String?) async throws -> [SearchResult] {
+        try await searchConcepts(filter: filter, editionURI: editionURI, count: 30)
+    }
+}
+
 // MARK: - FHIR Client
 
 /// Client for looking up SNOMED CT concepts via a FHIR R4 terminology server.
@@ -171,7 +204,7 @@ enum OntoserverError: LocalizedError {
 ///
 /// This class is safe to use from any thread. Network operations use
 /// async/await, and the cache is protected by a Swift actor.
-final class OntoserverClient {
+final class OntoserverClient: ConceptSearching, @unchecked Sendable {
     /// The base URL for FHIR API requests, read from user settings.
     /// Uses the thread-safe static accessor to avoid MainActor isolation issues.
     private var baseURL: URL { FHIROptions.currentBaseURL }
@@ -228,7 +261,330 @@ final class OntoserverClient {
         AppLog.info(AppLog.network, "lookup success conceptId=\(conceptId) edition=\(result.branch)")
         return result
     }
-    
+
+    // MARK: - Search (ValueSet/$expand)
+
+    /// Searches for SNOMED CT concepts matching a text filter.
+    ///
+    /// Uses the `ValueSet/$expand` operation with a filter to find concepts
+    /// across one or more SNOMED CT editions.
+    ///
+    /// - Parameters:
+    ///   - filter: The search text to match against concept terms
+    ///   - editionURI: Optional edition URI to limit search; nil = all editions
+    ///   - count: Maximum number of results to return (default: 30)
+    /// - Returns: Array of matching concepts with PT, FSN, and edition info
+    /// - Throws: Network or parsing errors
+    func searchConcepts(filter: String, editionURI: String?, count: Int = 30) async throws -> [SearchResult] {
+        guard !filter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return []
+        }
+
+        AppLog.info(AppLog.network, "searchConcepts filter=\(filter) editionURI=\(editionURI ?? "all")")
+
+        // Fetch all editions for both the request and name resolution
+        let allEditions = try await fetchAllEditions()
+
+        // Add International edition (it's filtered out in fetchAllEditions)
+        let international = SNOMEDEdition(
+            system: "http://snomed.info/sct",
+            version: "http://snomed.info/sct/\(SNOMEDConstants.internationalEditionId)",
+            title: "International"
+        )
+        let allEditionsWithInternational = [international] + allEditions
+
+        // Build the list of editions to include in the search
+        let editionsToInclude: [SNOMEDEdition]
+        if let specificURI = editionURI {
+            // Single edition selected - look up from fetched editions for correct system URL
+            if let matched = allEditionsWithInternational.first(where: { $0.version == specificURI }) {
+                editionsToInclude = [matched]
+            } else {
+                editionsToInclude = [SNOMEDEdition(system: "http://snomed.info/sct", version: specificURI, title: "")]
+            }
+        } else {
+            // All editions
+            editionsToInclude = allEditionsWithInternational
+        }
+
+        // Build the request body
+        let requestBody = buildExpandRequestBody(filter: filter, editions: editionsToInclude, count: count)
+
+        AppLog.debug(AppLog.network, "searchConcepts editions=\(editionsToInclude.map { $0.version })")
+
+        // Make the POST request
+        let url = baseURL.appendingPathComponent("ValueSet/$expand")
+        let response: ValueSetExpansionResponse = try await postJSON(url, body: requestBody)
+
+        // Parse and deduplicate the results
+        return parseSearchResults(from: response, allEditions: allEditionsWithInternational)
+    }
+
+    /// Returns all available SNOMED CT editions from the server.
+    ///
+    /// This is exposed publicly for the search panel to populate the edition picker.
+    ///
+    /// - Returns: Array of available editions (excluding International, which is handled separately)
+    /// - Throws: Network or parsing errors
+    func getAvailableEditions() async throws -> [SNOMEDEdition] {
+        try await fetchAllEditions()
+    }
+
+    /// Builds the FHIR Parameters request body for ValueSet/$expand.
+    private func buildExpandRequestBody(filter: String, editions: [SNOMEDEdition], count: Int) -> [String: Any] {
+        // Build the compose.include array
+        var includes: [[String: String]] = []
+        for edition in editions {
+            includes.append([
+                "system": edition.system,
+                "version": edition.version
+            ])
+        }
+
+        let valueSetResource: [String: Any] = [
+            "resourceType": "ValueSet",
+            "compose": [
+                "include": includes
+            ]
+        ]
+
+        let parameters: [[String: Any]] = [
+            ["name": "filter", "valueString": filter],
+            ["name": "valueSet", "resource": valueSetResource],
+            ["name": "count", "valueInteger": count],
+            ["name": "activeOnly", "valueBoolean": true],
+            ["name": "includeDesignations", "valueBoolean": true]
+        ]
+
+        return [
+            "resourceType": "Parameters",
+            "parameter": parameters
+        ]
+    }
+
+    /// Parses search results from a ValueSet expansion response.
+    ///
+    /// Results are deduplicated by code, keeping only the first occurrence.
+    ///
+    /// When searching a single edition, the server may omit the `version` field
+    /// from results. In that case, the version and edition name are inferred
+    /// from the searched editions.
+    private func parseSearchResults(from response: ValueSetExpansionResponse, allEditions: [SNOMEDEdition]) -> [SearchResult] {
+        guard let contains = response.expansion?.contains else {
+            return []
+        }
+
+        // Build edition name map from static dictionary + fetched editions
+        var editionNames = Self.editionNamesByModuleId
+        for edition in allEditions {
+            // Extract edition ID from version URI (e.g., "http://snomed.info/sct/123" -> "123")
+            let components = edition.version.split(separator: "/")
+            if components.count >= 4 {
+                let editionId = String(components[3])
+                // Only add if not already in static dictionary (static names take precedence)
+                if editionNames[editionId] == nil {
+                    editionNames[editionId] = edition.title
+                }
+            }
+        }
+
+        // Extract used-codesystem parameters for version fallback.
+        // Format: "http://snomed.info/sct|http://snomed.info/sct/32506021000036107/version/20260131"
+        // Build a map from system URI to the full version URI (with date).
+        var usedCodeSystemVersions: [String: String] = [:]
+        if let parameters = response.expansion?.parameter {
+            for param in parameters where param.name == "used-codesystem" {
+                guard let valueUri = param.valueUri else { continue }
+                let parts = valueUri.split(separator: "|", maxSplits: 1)
+                if parts.count == 2 {
+                    let systemURI = String(parts[0])
+                    let versionURI = String(parts[1])
+                    usedCodeSystemVersions[systemURI] = versionURI
+                }
+            }
+        }
+
+        // Parse results and deduplicate by code
+        var seenCodes = Set<String>()
+        var results: [SearchResult] = []
+
+        for item in contains {
+            guard let code = item.code,
+                  let display = item.display else {
+                continue
+            }
+
+            // Skip duplicates
+            if seenCodes.contains(code) {
+                continue
+            }
+            seenCodes.insert(code)
+
+            let system = item.system ?? "http://snomed.info/sct"
+
+            // Use item version if present, otherwise fall back to used-codesystem version
+            let version = item.version ?? usedCodeSystemVersions[system] ?? ""
+
+            // Extract FSN from designations
+            let fsn = item.designation?.first(where: { designation in
+                designation.use?.code == SNOMEDConstants.fsnDesignationCode
+            })?.value
+
+            // Derive edition name from version
+            let editionName = deriveEditionName(from: version, editionNames: editionNames)
+
+            results.append(SearchResult(
+                code: code,
+                display: display,
+                fsn: fsn,
+                system: system,
+                version: version,
+                editionName: editionName
+            ))
+        }
+
+        return results
+    }
+
+    /// Map of known SNOMED CT edition module IDs to human-readable names.
+    ///
+    /// Used to derive display names for editions. Falls back to the
+    /// CodeSystem.title from the server for unknown edition IDs.
+    private static let editionNamesByModuleId: [String: String] = [
+        // International
+        "900000000000207008": "International",
+        // National editions
+        "11000221109": "Argentine",
+        "32506021000036107": "Australian",
+        "11000234105": "Austrian",
+        "11000172109": "Belgian",
+        "20611000087101": "Canadian",
+        "554471000005108": "Danish",
+        "11000181102": "Estonian",
+        "11000315107": "French",
+        "11000274103": "German",
+        "11000220105": "Irish",
+        "11000318109": "Jamaican",
+        "450829007": "Latin American Spanish",
+        "11000146104": "Netherlands",
+        "21000210109": "New Zealand",
+        "51000202101": "Norwegian",
+        "900000001000122104": "Spanish",
+        "45991000052106": "Swedish",
+        "2011000195101": "Swiss",
+        "83821000000107": "United Kingdom composition module",
+        "999000041000000102": "United Kingdom",
+        "999000011000000103": "United Kingdom Clinical",
+        "999000021000000109": "United Kingdom Drug",
+        "731000124108": "United States",
+        "5631000179106": "Uruguayan",
+        // Special-purpose modules
+        "999991001000101": "IPS Terminology",
+        "11010000107": "LOINC Extension",
+        "332351000009108": "Veterinary Extension",
+    ]
+
+    /// Derives a human-readable edition name from a version URI.
+    private func deriveEditionName(from version: String, editionNames: [String: String]) -> String {
+        // Version format: http://snomed.info/sct/<editionId>/version/<date>
+        let components = version.split(separator: "/")
+        guard components.count >= 4 else {
+            return "Unknown"
+        }
+
+        let editionId = String(components[3])
+        return editionNames[editionId] ?? editionId
+    }
+
+    /// Performs a POST request with JSON body and decodes the response.
+    private func postJSON<T: Decodable>(_ url: URL, body: [String: Any]) async throws -> T {
+        var lastError: Error?
+
+        for attempt in 0...NetworkConstants.maxRetries {
+            if attempt > 0 {
+                let delay = NetworkConstants.baseRetryDelay * pow(2.0, Double(attempt - 1))
+                AppLog.info(AppLog.network, "retry attempt=\(attempt)/\(NetworkConstants.maxRetries) delay=\(delay)s url=\(url.absoluteString)")
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
+
+            do {
+                return try await performPostRequest(url, body: body)
+            } catch {
+                lastError = error
+
+                // Only retry on transient errors
+                if !isRetryableError(error) {
+                    throw error
+                }
+
+                if attempt == NetworkConstants.maxRetries {
+                    AppLog.error(AppLog.network, "all retries exhausted url=\(url.absoluteString)")
+                }
+            }
+        }
+
+        throw lastError ?? URLError(.unknown)
+    }
+
+    /// Performs the actual POST request.
+    private func performPostRequest<T: Decodable>(_ url: URL, body: [String: Any]) async throws -> T {
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/fhir+json", forHTTPHeaderField: "Accept")
+        req.setValue("application/fhir+json", forHTTPHeaderField: "Content-Type")
+        req.timeoutInterval = NetworkConstants.requestTimeout
+
+        let jsonData = try JSONSerialization.data(withJSONObject: body)
+        req.httpBody = jsonData
+
+        AppLog.debug(AppLog.network, "request POST url=\(url.absoluteString)")
+
+        do {
+            let (data, resp) = try await session.data(for: req)
+
+            if let http = resp as? HTTPURLResponse {
+                AppLog.info(AppLog.network, "response status=\(http.statusCode) url=\(url.absoluteString)")
+            } else {
+                AppLog.warning(AppLog.network, "response non-HTTP url=\(url.absoluteString)")
+            }
+
+            guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+                let responseBody = String(data: data, encoding: .utf8) ?? ""
+                let bodySnippet = AppLog.snippet(responseBody, limit: 2000)
+
+                AppLog.error(AppLog.network, "HTTP error code=\(code) url=\(url.absoluteString) body=\(bodySnippet)")
+
+                throw NSError(
+                    domain: "OntoserverClient",
+                    code: code,
+                    userInfo: [NSLocalizedDescriptionKey: "HTTP \(code): \(bodySnippet)"]
+                )
+            }
+
+            do {
+                return try JSONDecoder().decode(T.self, from: data)
+            } catch {
+                let responseBody = String(data: data, encoding: .utf8) ?? ""
+                let bodySnippet = AppLog.snippet(responseBody, limit: 2000)
+
+                AppLog.error(AppLog.network, "decode error url=\(url.absoluteString) error=\(error.localizedDescription) body=\(bodySnippet)")
+                throw error
+            }
+
+        } catch let urlError as URLError {
+            AppLog.error(
+                AppLog.network,
+                "URLError url=\(url.absoluteString) code=\(urlError.code.rawValue) desc=\(urlError.localizedDescription)"
+            )
+            throw urlError
+
+        } catch {
+            AppLog.error(AppLog.network, "error url=\(url.absoluteString) desc=\(error.localizedDescription)")
+            throw error
+        }
+    }
+
     private func lookupInSystem(conceptId: String, system: String, version: String) async throws -> ConceptResult? {
         guard var comps = URLComponents(url: baseURL.appendingPathComponent("CodeSystem/$lookup"), resolvingAgainstBaseURL: false) else {
             throw OntoserverError.invalidURL("Cannot create URL components from base URL")
@@ -292,17 +648,29 @@ final class OntoserverClient {
             editionMap[editionURI] = editionMap[editionURI] ?? codeSystem
         }
 
-        var editions = editionMap.values.map { cs in
-            SNOMEDEdition(
+        var editions = editionMap.values.map { cs -> SNOMEDEdition in
+            let version = extractEditionURI(from: cs.version ?? "") ?? "unknown-edition"
+            // Extract module ID from version URI (e.g., "http://snomed.info/sct/32506021000036107" -> "32506021000036107")
+            let components = version.split(separator: "/")
+            let moduleId = components.count >= 4 ? String(components[3]) : nil
+            // Prefer static name map, fall back to CodeSystem title from server
+            let title = moduleId.flatMap({ Self.editionNamesByModuleId[$0] })
+                ?? cs.title ?? cs.name ?? "Unknown Edition"
+            return SNOMEDEdition(
                 system: cs.url ?? "http://snomed.info/sct",
-                version: extractEditionURI(from: cs.version ?? "") ?? "unknown-edition",
-                title: cs.title ?? cs.name ?? "Unknown Edition"
+                version: version,
+                title: title
             )
         }
 
-        // Ensure xSCT editions are sorted to the bottom
+        // Sort alphabetically by title, with xSCT editions at the bottom
         editions.sort {
-            systemSortKey($0.system) < systemSortKey($1.system)
+            let systemOrder0 = systemSortKey($0.system)
+            let systemOrder1 = systemSortKey($1.system)
+            if systemOrder0 != systemOrder1 {
+                return systemOrder0 < systemOrder1
+            }
+            return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
         }
 
         AppLog.info(AppLog.network, "found \(editions.count) SNOMED editions")
@@ -502,26 +870,7 @@ final class OntoserverClient {
     }
     
     private func getEditionName(for editionId: String) -> String {
-        // Map of known edition IDs to human-readable names
-        let editionNames: [String: String] = [
-            "900000000000207008": "International",
-            "32506021000036107": "Australian",
-            "731000124108": "United States",
-            "999000041000000102": "United Kingdom",
-            "20611000087101": "Canadian",
-            "449081005": "Spanish",
-            "5991000124107": "Netherlands",
-            "45991000052106": "Swedish",
-            "554471000005108": "Danish",
-            "11000146104": "Norwegian",
-            "999000011000000103": "United Kingdom Clinical",
-            "999000021000000109": "United Kingdom Drug",
-            "21000210109": "Belgian",
-            "83821000000107": "United Kingdom Edition",
-            "11000220105" : "Ireland"
-        ]
-        
-        return editionNames[editionId] ?? editionId
+        Self.editionNamesByModuleId[editionId] ?? editionId
     }
     
     private func getJSON<T: Decodable>(_ url: URL) async throws -> T {
@@ -815,7 +1164,10 @@ struct CodeSystem: Decodable {
 /// - International: `http://snomed.info/sct/900000000000207008`
 /// - Australian: `http://snomed.info/sct/32506021000036107`
 /// - US: `http://snomed.info/sct/731000124108`
-struct SNOMEDEdition {
+struct SNOMEDEdition: Identifiable, Hashable {
+    /// Unique identifier for SwiftUI lists (uses the version URI).
+    var id: String { version }
+
     /// The SNOMED CT system URL.
     ///
     /// - `http://snomed.info/sct` for official editions
@@ -831,4 +1183,48 @@ struct SNOMEDEdition {
     ///
     /// Example: "Australian", "United States", "International"
     let title: String
+}
+
+// MARK: - ValueSet Expansion Structures
+
+/// Response from a ValueSet/$expand operation.
+///
+/// Contains the expansion with a list of concepts matching the search filter.
+struct ValueSetExpansionResponse: Decodable {
+    let resourceType: String
+    let expansion: Expansion?
+
+    struct Expansion: Decodable {
+        let identifier: String?
+        let timestamp: String?
+        let total: Int?
+        let parameter: [ExpansionParameter]?
+        let contains: [ExpansionContains]?
+    }
+
+    /// A parameter within the expansion metadata (e.g., `used-codesystem`).
+    struct ExpansionParameter: Decodable {
+        let name: String?
+        let valueUri: String?
+    }
+
+    struct ExpansionContains: Decodable {
+        let system: String?
+        let version: String?
+        let code: String?
+        let display: String?
+        let designation: [Designation]?
+    }
+
+    struct Designation: Decodable {
+        let language: String?
+        let use: DesignationUse?
+        let value: String?
+    }
+
+    struct DesignationUse: Decodable {
+        let system: String?
+        let code: String?
+        let display: String?
+    }
 }

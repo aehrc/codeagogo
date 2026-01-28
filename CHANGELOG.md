@@ -6,15 +6,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Concept Search and Insert feature**: New global hotkey (Control+Option+S) opens a floating search panel
+- Typeahead search using FHIR ValueSet/$expand API to find concepts by term
+- Edition selector: filter by specific SNOMED CT edition or search across all editions
+- Insert format selector: choose between ID, PT, FSN, ID|PT, or ID|FSN formats
+- Text insertion via simulated Cmd+V paste into any application
+- Search panel shows Preferred Term, FSN (if different), concept ID, and edition name
+- Settings for configuring the search hotkey and default insert format
+- Menu bar item "Search Concepts..." for accessing the search panel
+
+### Changed
+- GlobalHotKey now supports multiple hotkeys via an `id` parameter
+- Settings window height increased to accommodate new options
+- SNOMEDEdition now conforms to Identifiable and Hashable for SwiftUI compatibility
+
+### Fixed
+- Search results now deduplicated by concept code (prevents duplicate entries from multiple edition versions)
+- Unknown edition IDs now fall back to CodeSystem title from server instead of showing raw ID
+
+### Testing
+- Added UI test automation target (`SNOMED LookupUITests`) with XCUITest coverage
+- Settings window UI tests (~20 tests): hotkey pickers, modifier toggles, format picker, FHIR URL, save button, logging, diagnostics
+- Search panel UI tests (~8 tests): panel open/close, search field, cancel, insert disabled state, edition picker
+- Menu bar UI tests (~3 tests): app launch, status item, menu items
+- SearchViewModel mock-based unit tests (~10 tests): search triggering, results, auto-selection, clear state, error handling, format output
+- Added `ConceptSearching` protocol for dependency injection in SearchViewModel tests
+- Added accessibility identifiers to SettingsView, SearchPanelView, and PopoverView for reliable XCUITest targeting
+- Added `--ui-testing` launch argument guard to skip single-instance check during UI tests
+
+### Technical
+- Added SearchResult model for ValueSet/$expand results
+- Added InsertFormat enum for concept formatting options
+- Added SearchSettings and SearchHotKeySettings singletons
+- Added SearchViewModel for coordinating search operations with debouncing
+- Added SearchPanelView (SwiftUI) and SearchPanelController (NSWindow management)
+- Extended OntoserverClient with searchConcepts() method and POST request support
+- Added sendCmdV() to SystemSelectionReader for paste simulation
+- Added comprehensive unit tests for search functionality
+
 ## [0.5.0] - 2026-01
 
-- Focus taken when the popup opens to allow easy closing with the escape key
-<<<<<<< HEAD
 ### Changed
 - Popover now takes focus when opened, allowing immediate dismissal with Escape key
 - Focus is restored to the previously active application when the popover closes
 
-=======
 ## [0.4.0] - 2026-01
 
 ### Added
