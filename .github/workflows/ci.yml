@@ -37,14 +37,28 @@ jobs:
             ENABLE_APP_SANDBOX=NO \
             | xcpretty
 
-      - name: Run Tests
+      - name: Unit Tests
         run: |
           xcodebuild test \
             -scheme "$SCHEME" \
             -destination "$DESTINATION" \
+            -only-testing:"SNOMED LookupTests" \
             -configuration Debug \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
+            ENABLE_HARDENED_RUNTIME=NO \
+            ENABLE_APP_SANDBOX=NO \
+            | xcpretty
+
+      - name: UI Tests
+        run: |
+          xcodebuild test \
+            -scheme "$SCHEME" \
+            -destination "$DESTINATION" \
+            -only-testing:"SNOMED LookupUITests" \
+            -configuration Debug \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
             ENABLE_HARDENED_RUNTIME=NO \
             ENABLE_APP_SANDBOX=NO \
             | xcpretty
