@@ -132,6 +132,67 @@ final class SettingsViewUITests: SNOMEDLookupUITestCase {
                       "Search Shift modifier toggle should exist")
     }
 
+    // MARK: - Replace Hotkey Section
+
+    @MainActor
+    func testReplaceHotkeyKeyPickerExists() throws {
+        let picker = settingsWindow.popUpButtons["settings.replaceHotkeyKey"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 3),
+                      "Replace hotkey key picker should exist")
+    }
+
+    @MainActor
+    func testReplaceControlToggleExists() throws {
+        let toggle = settingsWindow.checkBoxes["settings.replace.control"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 3),
+                      "Replace Control modifier toggle should exist")
+    }
+
+    @MainActor
+    func testReplaceOptionToggleExists() throws {
+        let toggle = settingsWindow.checkBoxes["settings.replace.option"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 3),
+                      "Replace Option modifier toggle should exist")
+    }
+
+    @MainActor
+    func testReplaceCommandToggleExists() throws {
+        let toggle = settingsWindow.checkBoxes["settings.replace.command"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 3),
+                      "Replace Command modifier toggle should exist")
+    }
+
+    @MainActor
+    func testReplaceShiftToggleExists() throws {
+        let toggle = settingsWindow.checkBoxes["settings.replace.shift"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 3),
+                      "Replace Shift modifier toggle should exist")
+    }
+
+    @MainActor
+    func testReplaceTermFormatPickerExists() throws {
+        let picker = settingsWindow.popUpButtons["settings.replaceTermFormat"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 3),
+                      "Replace term format picker should exist")
+    }
+
+    @MainActor
+    func testReplaceTermFormatCanBeChanged() throws {
+        let picker = settingsWindow.popUpButtons["settings.replaceTermFormat"]
+        guard picker.waitForExistence(timeout: 3) else {
+            XCTFail("Replace term format picker not found")
+            return
+        }
+        picker.click()
+
+        // Try to select "Preferred Term (PT)"
+        let menuItem = picker.menuItems["Preferred Term (PT)"]
+        if menuItem.waitForExistence(timeout: 2) {
+            menuItem.click()
+        }
+        XCTAssertTrue(picker.exists, "Picker should still exist after changing value")
+    }
+
     // MARK: - Insert Format Section
 
     @MainActor

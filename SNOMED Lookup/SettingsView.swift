@@ -5,6 +5,8 @@ struct SettingsView: View {
     @ObservedObject private var hk = HotKeySettings.shared
     @ObservedObject private var searchHk = SearchHotKeySettings.shared
     @ObservedObject private var searchSettings = SearchSettings.shared
+    @ObservedObject private var replaceHk = ReplaceHotKeySettings.shared
+    @ObservedObject private var replaceSettings = ReplaceSettings.shared
 
     // Logging setting persisted in UserDefaults
     @AppStorage(AppLog.debugKey) private var debugLoggingEnabled: Bool = false
@@ -21,6 +23,13 @@ struct SettingsView: View {
         ("F", UInt32(kVK_ANSI_F)),
         ("K", UInt32(kVK_ANSI_K)),
         ("Y", UInt32(kVK_ANSI_Y))
+    ]
+
+    private let replaceKeys: [(String, UInt32)] = [
+        ("R", UInt32(kVK_ANSI_R)),
+        ("Y", UInt32(kVK_ANSI_Y)),
+        ("K", UInt32(kVK_ANSI_K)),
+        ("U", UInt32(kVK_ANSI_U))
     ]
 
     var body: some View {
@@ -70,6 +79,40 @@ struct SettingsView: View {
                         modifierToggles(for: .search)
 
                         Text("Opens a panel to search and insert SNOMED CT concepts.")
+                            .foregroundStyle(.secondary)
+                            .font(.footnote)
+                    }
+                    .padding(.top, 4)
+                }
+
+                GroupBox("Replace Hotkey") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Key")
+                            Picker("", selection: $replaceHk.keyCode) {
+                                ForEach(replaceKeys, id: \.1) { item in
+                                    Text(item.0).tag(item.1)
+                                }
+                            }
+                            .frame(width: 120)
+                            .accessibilityIdentifier("settings.replaceHotkeyKey")
+                            .accessibilityLabel("Replace hotkey letter")
+                            .accessibilityHint("Select the letter key for the replace hotkey")
+                        }
+
+                        modifierToggles(for: .replace)
+
+                        Picker("Term format:", selection: $replaceSettings.termFormat) {
+                            ForEach(ReplaceTermFormat.allCases, id: \.self) { format in
+                                Text(format.rawValue).tag(format)
+                            }
+                        }
+                        .frame(width: 280)
+                        .accessibilityIdentifier("settings.replaceTermFormat")
+                        .accessibilityLabel("Replace term format")
+                        .accessibilityHint("Select whether to use FSN or PT in the replacement")
+
+                        Text("Replaces selected concept ID with ID | term |")
                             .foregroundStyle(.secondary)
                             .font(.footnote)
                     }
@@ -155,7 +198,7 @@ struct SettingsView: View {
             }
             .padding(16)
         }
-        .frame(width: 520, height: 580)
+        .frame(width: 520, height: 680)
     }
 
     // MARK: - Modifier Toggles
@@ -163,27 +206,35 @@ struct SettingsView: View {
     private enum HotKeyType {
         case lookup
         case search
+        case replace
+
+        var accessibilityPrefix: String {
+            switch self {
+            case .lookup: return "settings.lookup"
+            case .search: return "settings.search"
+            case .replace: return "settings.replace"
+            }
+        }
     }
 
     @ViewBuilder
     private func modifierToggles(for type: HotKeyType) -> some View {
-        let prefix = type == .lookup ? "settings.lookup" : "settings.search"
         VStack(alignment: .leading, spacing: 8) {
             Text("Modifiers")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
             Toggle("Control", isOn: bindingFor(.control, type: type))
-                .accessibilityIdentifier("\(prefix).control")
+                .accessibilityIdentifier("\(type.accessibilityPrefix).control")
                 .accessibilityHint("Include Control key in hotkey combination")
             Toggle("Option", isOn: bindingFor(.option, type: type))
-                .accessibilityIdentifier("\(prefix).option")
+                .accessibilityIdentifier("\(type.accessibilityPrefix).option")
                 .accessibilityHint("Include Option key in hotkey combination")
             Toggle("Command", isOn: bindingFor(.command, type: type))
-                .accessibilityIdentifier("\(prefix).command")
+                .accessibilityIdentifier("\(type.accessibilityPrefix).command")
                 .accessibilityHint("Include Command key in hotkey combination")
             Toggle("Shift", isOn: bindingFor(.shift, type: type))
-                .accessibilityIdentifier("\(prefix).shift")
+                .accessibilityIdentifier("\(type.accessibilityPrefix).shift")
                 .accessibilityHint("Include Shift key in hotkey combination")
         }
     }
@@ -197,6 +248,8 @@ struct SettingsView: View {
                     return (hk.modifiersRaw & raw) != 0
                 case .search:
                     return (searchHk.modifiersRaw & raw) != 0
+                case .replace:
+                    return (replaceHk.modifiersRaw & raw) != 0
                 }
             },
             set: { on in
@@ -213,6 +266,12 @@ struct SettingsView: View {
                         searchHk.modifiersRaw |= raw
                     } else {
                         searchHk.modifiersRaw &= ~raw
+                    }
+                case .replace:
+                    if on {
+                        replaceHk.modifiersRaw |= raw
+                    } else {
+                        replaceHk.modifiersRaw &= ~raw
                     }
                 }
             }

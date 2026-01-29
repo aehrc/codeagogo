@@ -49,11 +49,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Shared settings for the search hotkey configuration.
     private let searchHotKeySettings = SearchHotKeySettings.shared
 
+    /// Shared settings for the replace hotkey configuration.
+    private let replaceHotKeySettings = ReplaceHotKeySettings.shared
+
+    /// Shared settings for the replace term format.
+    private let replaceSettings = ReplaceSettings.shared
+
     /// The currently registered global hotkey handler for lookup.
     private var hotKey: GlobalHotKey?
 
     /// The currently registered global hotkey handler for search.
     private var searchHotKey: GlobalHotKey?
+
+    /// The currently registered global hotkey handler for replace.
+    private var replaceHotKey: GlobalHotKey?
 
     /// The search panel controller for the concept search feature.
     private let searchPanel = SearchPanelController()
@@ -79,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupPopover()
         setupHotKey()
         setupSearchHotKey()
+        setupReplaceHotKey()
     }
 
     /// Handles reopen events (e.g., clicking the Dock icon).
@@ -227,6 +237,98 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.searchHotKey?.update(keyCode: newKeyCode, modifiers: mods)
             }
             .store(in: &cancellables)
+    }
+
+    /// Registers the replace hotkey and sets up observation for settings changes.
+    ///
+    /// The replace hotkey looks up the selected concept ID and replaces it with
+    /// the ID plus term in pipe-delimited format. Settings changes take effect
+    /// immediately.
+    private func setupReplaceHotKey() {
+        // Initial registration with current settings (using thread-safe accessors)
+        replaceHotKey = GlobalHotKey(
+            keyCode: ReplaceHotKeySettings.currentKeyCode,
+            modifiers: ReplaceHotKeySettings.currentModifiers,
+            id: 3  // Use id=3 to distinguish from lookup (id=1) and search (id=2)
+        ) { [weak self] in
+            self?.replaceSelection()
+        }
+        replaceHotKey?.start()
+
+        // Update hotkey live when settings change
+        Publishers.CombineLatest(replaceHotKeySettings.$keyCode, replaceHotKeySettings.$modifiersRaw)
+            .dropFirst()  // Skip initial value emission
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newKeyCode, newModifiersRaw in
+                guard let self else { return }
+                self.replaceHotKeySettings.save()
+                // Convert raw modifiers to NSEvent.ModifierFlags
+                var mods: NSEvent.ModifierFlags = []
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.control])) != 0 { mods.insert(.control) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.option])) != 0 { mods.insert(.option) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
+                self.replaceHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Replaces the selected SNOMED CT concept ID with the ID plus term in pipe-delimited format.
+    ///
+    /// This method:
+    /// 1. Reads the current selection from the frontmost application
+    /// 2. Extracts a SNOMED CT concept ID from the selection
+    /// 3. Looks up the concept to get the term (FSN or PT based on settings)
+    /// 4. Formats the replacement string as "ID | term |"
+    /// 5. Pastes the replacement to replace the selection
+    ///
+    /// If any step fails (no selection, no valid ID, lookup error), a system beep is played.
+    @objc private func replaceSelection() {
+        Task { @MainActor in
+            do {
+                // 1. Read selection
+                let text = try SystemSelectionReader().readSelectionByCopying()
+
+                // 2. Extract concept ID
+                guard let conceptId = model.extractConceptId(from: text) else {
+                    NSSound.beep()
+                    AppLog.warning(AppLog.ui, "Replace failed: no valid concept ID in selection")
+                    return
+                }
+
+                // 3. Look up concept
+                let result = try await OntoserverClient().lookup(conceptId: conceptId)
+
+                // 4. Format replacement string based on settings
+                let term: String
+                switch replaceSettings.termFormat {
+                case .fsn:
+                    term = result.fsn ?? result.pt ?? conceptId
+                case .pt:
+                    term = result.pt ?? result.fsn ?? conceptId
+                }
+                let replacement = "\(conceptId) | \(term) |"
+
+                // 5. Put on clipboard
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.setString(replacement, forType: .string)
+
+                // 6. Small delay to ensure clipboard is ready
+                try await Task.sleep(nanoseconds: 50_000_000)  // 50ms
+
+                // 7. Send Cmd+V to replace selection
+                if !SystemSelectionReader().sendCmdV() {
+                    throw LookupError.accessibilityPermissionLikelyMissing
+                }
+
+                AppLog.info(AppLog.ui, "Replaced selection with: \(replacement)")
+
+            } catch {
+                NSSound.beep()
+                AppLog.error(AppLog.ui, "Replace failed: \(error)")
+            }
+        }
     }
 
     /// Shows the SNOMED CT search panel near the cursor.

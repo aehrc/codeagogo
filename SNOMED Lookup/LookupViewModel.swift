@@ -142,7 +142,7 @@ final class LookupViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Private Methods
+    // MARK: - Concept ID Extraction
 
     /// Extracts the first plausible SNOMED CT concept ID from text.
     ///
@@ -161,7 +161,7 @@ final class LookupViewModel: ObservableObject {
     /// extractConceptId(from: "No numbers here")   // Returns nil
     /// extractConceptId(from: "12345")             // Returns nil (too short)
     /// ```
-    private func extractConceptId(from text: String) -> String? {
+    func extractConceptId(from text: String) -> String? {
         let s = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Match a digit run 6–18 digits (word boundaries reduce false matches)

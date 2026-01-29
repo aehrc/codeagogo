@@ -4,6 +4,21 @@ All notable changes to SNOMED Lookup are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **Replace hotkey** (Control+Option+R): Looks up selected concept ID and replaces it with `ID | term |` format
+- Configurable term format for replace: FSN (default) or PT
+- Settings UI for replace hotkey key, modifiers, and term format
+
+### Technical
+- Added ReplaceHotKeySettings singleton for replace hotkey configuration
+- Added ReplaceSettings singleton for replace term format preference
+- Added replaceSelection() action in AppDelegate
+- Extended SettingsView with Replace Hotkey section
+- Added unit tests for replace hotkey settings and term format
+- Added UI tests for replace hotkey settings controls
+
 ## [0.6.0] - 2026-01
 
 ### Added
