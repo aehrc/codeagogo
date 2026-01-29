@@ -4,7 +4,7 @@ All notable changes to SNOMED Lookup are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.7.0] - 2026-01
 
 ### Added
 - **Replace hotkey** (Control+Option+R): Looks up selected concept ID and replaces it with `ID | term |` format
