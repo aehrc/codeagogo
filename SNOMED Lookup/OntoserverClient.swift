@@ -262,6 +262,180 @@ final class OntoserverClient: ConceptSearching, @unchecked Sendable {
         return result
     }
 
+    // MARK: - Batch Lookup (ValueSet/$expand)
+
+    /// Result of a batch lookup operation containing display names for multiple concepts.
+    struct BatchLookupResult {
+        /// Map from concept ID to its preferred term (display name).
+        let ptByCode: [String: String]
+        /// Map from concept ID to its fully specified name.
+        let fsnByCode: [String: String]
+
+        /// Returns the PT for a code, or nil if not found.
+        func pt(for code: String) -> String? { ptByCode[code] }
+        /// Returns the FSN for a code, or nil if not found.
+        func fsn(for code: String) -> String? { fsnByCode[code] }
+    }
+
+    /// Looks up multiple SNOMED CT concepts in a single batch request.
+    ///
+    /// Uses `ValueSet/$expand` with explicit code inclusion to efficiently look up
+    /// display names for multiple concepts in one API call. This is significantly
+    /// faster than individual lookups when processing many codes.
+    ///
+    /// ## Caching
+    ///
+    /// This method integrates with the existing concept cache:
+    /// 1. Checks the cache first and returns cached results immediately
+    /// 2. Only requests uncached codes from the server
+    /// 3. Stores newly fetched results in the cache for future lookups
+    ///
+    /// - Parameter conceptIds: Array of SNOMED CT concept identifiers to look up
+    /// - Returns: A `BatchLookupResult` containing PT and FSN for each found concept
+    /// - Throws: Network or parsing errors
+    ///
+    /// ## Performance
+    ///
+    /// A single batch request for 62 codes takes ~0.5 seconds, compared to ~7+ seconds
+    /// for individual lookups (14x faster). Cached results are returned instantly.
+    ///
+    /// ## Example
+    ///
+    /// ```swift
+    /// let client = OntoserverClient()
+    /// let result = try await client.batchLookup(conceptIds: ["73211009", "385804009"])
+    ///
+    /// print(result.pt(for: "73211009"))  // "Diabetes mellitus"
+    /// print(result.fsn(for: "73211009")) // "Diabetes mellitus (disorder)"
+    /// ```
+    func batchLookup(conceptIds: [String]) async throws -> BatchLookupResult {
+        guard !conceptIds.isEmpty else {
+            return BatchLookupResult(ptByCode: [:], fsnByCode: [:])
+        }
+
+        // Check cache first and collect results for cached concepts
+        var ptByCode: [String: String] = [:]
+        var fsnByCode: [String: String] = [:]
+        var uncachedIds: [String] = []
+
+        for conceptId in conceptIds {
+            if let cached = await cache.get(conceptId, ttl: NetworkConstants.cacheTTL) {
+                if let pt = cached.pt { ptByCode[conceptId] = pt }
+                if let fsn = cached.fsn { fsnByCode[conceptId] = fsn }
+            } else {
+                uncachedIds.append(conceptId)
+            }
+        }
+
+        let cachedCount = conceptIds.count - uncachedIds.count
+        if cachedCount > 0 {
+            AppLog.debug(AppLog.network, "batchLookup cache hits=\(cachedCount)")
+        }
+
+        // If all concepts were cached, return early
+        if uncachedIds.isEmpty {
+            AppLog.info(AppLog.network, "batchLookup all \(conceptIds.count) concepts from cache")
+            return BatchLookupResult(ptByCode: ptByCode, fsnByCode: fsnByCode)
+        }
+
+        AppLog.info(AppLog.network, "batchLookup requesting \(uncachedIds.count) uncached concepts")
+
+        // Build the request body with uncached codes only
+        let requestBody = buildBatchLookupRequestBody(conceptIds: uncachedIds)
+
+        // Make the POST request
+        let url = baseURL.appendingPathComponent("ValueSet/$expand")
+        let response: ValueSetExpansionResponse = try await postJSON(url, body: requestBody)
+
+        // Parse the results and merge with cached results
+        let fetchedResults = parseBatchLookupResults(from: response)
+
+        // Store fetched results in cache and merge into result
+        for (code, pt) in fetchedResults.ptByCode {
+            ptByCode[code] = pt
+
+            // Create a minimal ConceptResult for caching
+            let fsn = fetchedResults.fsnByCode[code]
+            let cachedResult = ConceptResult(
+                conceptId: code,
+                branch: "batch-lookup",  // Marker to indicate this came from batch lookup
+                fsn: fsn,
+                pt: pt,
+                active: nil,
+                effectiveTime: nil,
+                moduleId: nil
+            )
+            await cache.set(code, result: cachedResult)
+        }
+
+        for (code, fsn) in fetchedResults.fsnByCode {
+            fsnByCode[code] = fsn
+        }
+
+        AppLog.info(AppLog.network, "batchLookup found \(fetchedResults.ptByCode.count) new concepts, total \(ptByCode.count)")
+        return BatchLookupResult(ptByCode: ptByCode, fsnByCode: fsnByCode)
+    }
+
+    /// Builds the FHIR Parameters request body for batch lookup via ValueSet/$expand.
+    private func buildBatchLookupRequestBody(conceptIds: [String]) -> [String: Any] {
+        // Build the concept array with explicit codes
+        let concepts: [[String: String]] = conceptIds.map { ["code": $0] }
+
+        let valueSetResource: [String: Any] = [
+            "resourceType": "ValueSet",
+            "compose": [
+                "include": [
+                    [
+                        "system": "http://snomed.info/sct",
+                        "concept": concepts
+                    ]
+                ]
+            ]
+        ]
+
+        let parameters: [[String: Any]] = [
+            ["name": "valueSet", "resource": valueSetResource],
+            ["name": "includeDesignations", "valueBoolean": true]
+        ]
+
+        return [
+            "resourceType": "Parameters",
+            "parameter": parameters
+        ]
+    }
+
+    /// Parses batch lookup results from a ValueSet expansion response.
+    private func parseBatchLookupResults(from response: ValueSetExpansionResponse) -> BatchLookupResult {
+        var ptByCode: [String: String] = [:]
+        var fsnByCode: [String: String] = [:]
+
+        guard let contains = response.expansion?.contains else {
+            return BatchLookupResult(ptByCode: ptByCode, fsnByCode: fsnByCode)
+        }
+
+        for item in contains {
+            guard let code = item.code else { continue }
+
+            // The display field contains the preferred term
+            if let display = item.display {
+                ptByCode[code] = display
+            }
+
+            // Extract FSN from designations (use code 900000000000003001)
+            if let designations = item.designation {
+                for designation in designations {
+                    if designation.use?.code == SNOMEDConstants.fsnDesignationCode {
+                        fsnByCode[code] = designation.value
+                        break
+                    }
+                }
+            }
+        }
+
+        AppLog.info(AppLog.network, "batchLookup found \(ptByCode.count) concepts")
+        return BatchLookupResult(ptByCode: ptByCode, fsnByCode: fsnByCode)
+    }
+
     // MARK: - Search (ValueSet/$expand)
 
     /// Searches for SNOMED CT concepts matching a text filter.

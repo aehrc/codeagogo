@@ -433,6 +433,224 @@ struct ECLFormatter {
     }
 }
 
+// MARK: - Minifying Formatter
+
+/// A compact formatter that produces single-line ECL output.
+///
+/// Unlike `ECLFormatter`, this produces minimal whitespace output
+/// suitable for storage or transmission where readability isn't a priority.
+struct ECLMinifier {
+    private var output: String = ""
+
+    /// Minifies an ECL expression to a compact single-line string.
+    ///
+    /// - Parameter expression: The ECL expression to minify
+    /// - Returns: The minified ECL string
+    mutating func minify(_ expression: ECLExpression) -> String {
+        output = ""
+        printExpression(expression)
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private mutating func write(_ text: String) {
+        output += text
+    }
+
+    private mutating func printExpression(_ expression: ECLExpression) {
+        switch expression {
+        case .compound(let compound):
+            printCompound(compound)
+        case .refined(let refined):
+            printRefined(refined)
+        case .subExpression(let sub):
+            printSubExpression(sub)
+        }
+    }
+
+    private mutating func printCompound(_ compound: CompoundExpression) {
+        let leftNeedsParens = needsParens(compound.left, inCompound: compound.op)
+        if leftNeedsParens { write("(") }
+        printExpression(compound.left)
+        if leftNeedsParens { write(")") }
+
+        write(" \(compound.op.rawValue) ")
+
+        let rightNeedsParens = needsParens(compound.right, inCompound: compound.op)
+        if rightNeedsParens { write("(") }
+        printExpression(compound.right)
+        if rightNeedsParens { write(")") }
+    }
+
+    private func needsParens(_ expression: ECLExpression, inCompound op: CompoundExpression.Operator) -> Bool {
+        guard case .compound(let inner) = expression else { return false }
+        switch (op, inner.op) {
+        case (.and, .or), (.and, .minus), (.or, .minus):
+            return true
+        default:
+            return false
+        }
+    }
+
+    private mutating func printRefined(_ refined: RefinedExpression) {
+        printSubExpression(refined.expression)
+        write(": ")
+        printRefinement(refined.refinement)
+    }
+
+    private mutating func printSubExpression(_ sub: SubExpression) {
+        if let op = sub.constraintOp {
+            write(op.rawValue)
+            write(" ")
+        }
+        printFocusConcept(sub.focusConcept)
+        for filter in sub.filters {
+            write(" ")
+            printFilter(filter)
+        }
+    }
+
+    private mutating func printFocusConcept(_ focus: FocusConcept) {
+        switch focus {
+        case .concept(let concept):
+            printConceptReference(concept)
+        case .wildcard:
+            write("*")
+        case .nested(let expr):
+            write("(")
+            printExpression(expr)
+            write(")")
+        case .memberOf(let inner):
+            write("^")
+            printFocusConcept(inner)
+        }
+    }
+
+    private mutating func printConceptReference(_ concept: ConceptReference) {
+        write(concept.sctId)
+        if let term = concept.term {
+            write(" |")
+            write(term)
+            write("|")
+        }
+    }
+
+    private mutating func printRefinement(_ refinement: Refinement) {
+        for (index, item) in refinement.items.enumerated() {
+            if index > 0 { write(", ") }
+            printRefinementItem(item)
+        }
+    }
+
+    private mutating func printRefinementItem(_ item: RefinementItem) {
+        switch item {
+        case .attribute(let attr):
+            printAttribute(attr)
+        case .attributeGroup(let group):
+            printAttributeGroup(group)
+        case .conjunction(let items):
+            for (index, i) in items.enumerated() {
+                if index > 0 { write(", ") }
+                printRefinementItem(i)
+            }
+        case .disjunction(let items):
+            for (index, i) in items.enumerated() {
+                if index > 0 { write(" OR ") }
+                printRefinementItem(i)
+            }
+        }
+    }
+
+    private mutating func printAttribute(_ attr: Attribute) {
+        if let card = attr.cardinality {
+            write(card.text)
+            write(" ")
+        }
+        if attr.isReverse { write("R ") }
+        printAttributeName(attr.name)
+        write(" \(attr.comparator.rawValue) ")
+        printAttributeValue(attr.value)
+    }
+
+    private mutating func printAttributeName(_ name: AttributeName) {
+        switch name {
+        case .concept(let concept):
+            printConceptReference(concept)
+        case .wildcard:
+            write("*")
+        case .nested(let expr):
+            write("(")
+            printExpression(expr)
+            write(")")
+        }
+    }
+
+    private mutating func printAttributeValue(_ value: AttributeValue) {
+        switch value {
+        case .expression(let expr):
+            printExpression(expr)
+        case .concept(let concept):
+            printConceptReference(concept)
+        case .wildcard:
+            write("*")
+        case .nested(let expr):
+            write("(")
+            printExpression(expr)
+            write(")")
+        case .stringValue(let s):
+            write("\"\(s)\"")
+        case .integerValue(let i):
+            write(String(i))
+        case .booleanValue(let b):
+            write(b ? "true" : "false")
+        }
+    }
+
+    private mutating func printAttributeGroup(_ group: AttributeGroup) {
+        write("{ ")
+        for (index, item) in group.attributes.enumerated() {
+            if index > 0 { write(", ") }
+            printRefinementItem(item)
+        }
+        write(" }")
+    }
+
+    private mutating func printFilter(_ filter: Filter) {
+        write("{{ ")
+        for (index, constraint) in filter.constraints.enumerated() {
+            if index > 0 { write(", ") }
+            printFilterConstraint(constraint)
+        }
+        write(" }}")
+    }
+
+    private mutating func printFilterConstraint(_ constraint: FilterConstraint) {
+        switch constraint {
+        case .term(let termFilter):
+            write("term = ")
+            printTermFilter(termFilter)
+        case .language(let lang):
+            write("language = \(lang)")
+        case .type(let t):
+            write("type = \(t)")
+        case .dialect(let d):
+            write("dialect = \(d)")
+        case .active(let a):
+            write("active = \(a ? "true" : "false")")
+        case .moduleId(let m):
+            write("moduleId = \(m)")
+        }
+    }
+
+    private mutating func printTermFilter(_ filter: TermFilter) {
+        switch filter.matchType {
+        case .exact: break
+        case .match: write("match:")
+        case .wild: write("wild:")
+        }
+        write("\"\(filter.value)\"")
+    }
+}
+
 // MARK: - Public API
 
 /// Formats an ECL expression string to improve readability.
@@ -454,6 +672,63 @@ func formatECL(_ ecl: String, options: ECLFormatter.Options = .default) throws -
     // Format
     var formatter = ECLFormatter(options: options)
     return formatter.format(ast)
+}
+
+/// Minifies an ECL expression string to a compact single-line format.
+///
+/// - Parameter ecl: The ECL expression string to minify
+/// - Returns: The minified ECL string
+/// - Throws: `ECLError` if the input cannot be parsed
+func minifyECL(_ ecl: String) throws -> String {
+    // Tokenize
+    var lexer = ECLLexer(source: ecl)
+    let tokens = try lexer.tokenize()
+
+    // Parse
+    var parser = ECLParser(tokens: tokens)
+    let ast = try parser.parse()
+
+    // Minify
+    var minifier = ECLMinifier()
+    return minifier.minify(ast)
+}
+
+/// Toggles an ECL expression between pretty-printed and minified formats.
+///
+/// - If the input is already pretty-printed, returns the minified version
+/// - If the input is minified or irregular, returns the pretty-printed version
+///
+/// Detection works by comparing the normalized input with the pretty-printed output.
+///
+/// - Parameter ecl: The ECL expression string to toggle
+/// - Returns: The toggled ECL string (pretty if was minified, minified if was pretty)
+/// - Throws: `ECLError` if the input cannot be parsed
+func toggleECLFormat(_ ecl: String) throws -> String {
+    // Tokenize
+    var lexer = ECLLexer(source: ecl)
+    let tokens = try lexer.tokenize()
+
+    // Parse
+    var parser = ECLParser(tokens: tokens)
+    let ast = try parser.parse()
+
+    // Generate both formats
+    var formatter = ECLFormatter(options: .default)
+    let prettyPrinted = formatter.format(ast)
+
+    var minifier = ECLMinifier()
+    let minified = minifier.minify(ast)
+
+    // Normalize input for comparison (trim whitespace, normalize line endings)
+    let normalizedInput = ecl.trimmingCharacters(in: .whitespacesAndNewlines)
+        .replacingOccurrences(of: "\r\n", with: "\n")
+
+    // If input matches pretty-printed, return minified; otherwise return pretty-printed
+    if normalizedInput == prettyPrinted {
+        return minified
+    } else {
+        return prettyPrinted
+    }
 }
 
 /// Checks if a string appears to be a valid ECL expression.

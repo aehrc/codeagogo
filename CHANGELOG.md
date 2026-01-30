@@ -7,15 +7,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
-- **ECL Format hotkey** (Control+Option+E): Pretty-prints selected ECL expressions for improved readability
+- **ECL Format hotkey** (Control+Option+E): Toggles selected ECL expressions between pretty-printed and minified formats
 - Full ECL 2.x parser supporting constraint operators, compound expressions, refinements, and filters
 - Settings UI for configuring ECL format hotkey key and modifiers
 - **Progress HUD** for replace hotkey: Shows lookup progress when processing many concepts
 
 ### Fixed
-- **Replace hotkey reliability**: Fixed issue where some concept IDs weren't being replaced when processing large selections (50+ concepts). Now uses batched lookups with limited concurrency (5 at a time) to prevent server timeouts and rate limiting.
+- **Replace hotkey reliability**: Fixed issue where some concept IDs weren't being replaced when processing large selections (50+ concepts)
+
+### Performance
+- **Replace hotkey is now ~15x faster**: Uses batch lookup via `ValueSet/$expand` to fetch all concept terms in a single API request (~0.5s for 62 codes vs ~7+ seconds with individual lookups)
+- Batch lookup integrates with existing concept cache: cached concepts are returned instantly, only uncached codes are fetched from the server
 
 ### Changed
+- **ECL Format hotkey now toggles** between pretty-printed and minified formats:
+  - If ECL is minified or irregular → pretty-print it with indentation and line breaks
+  - If ECL is already pretty-printed → minify it to a single line
+  - Pressing the hotkey repeatedly toggles between formats
 - **Replace hotkey now has smart toggle behavior**:
   - Finds all SNOMED CT codes in the selection, looks them up in parallel
   - If a code has no term or wrong term → adds/updates the `| term |` suffix
@@ -29,15 +37,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Technical
 - Added ProgressHUD.swift for displaying lookup progress near cursor
-- Implemented batched concurrent lookups (max 5 at a time) to prevent server overwhelm
+- Added `batchLookup(conceptIds:)` method to OntoserverClient using `ValueSet/$expand` for efficient multi-concept lookup
+- Added `BatchLookupResult` struct to hold PT and FSN mappings from batch lookups
 - Added ECLToken.swift with token type definitions for ECL syntax elements
 - Added ECLLexer.swift for tokenizing ECL expressions (handles operators, identifiers, literals)
 - Added ECLAST.swift with AST node types (expressions, refinements, attributes, filters)
 - Added ECLParser.swift as a recursive descent parser for ECL 2.x grammar
 - Added ECLFormatter.swift for pretty-printing AST back to formatted ECL text
+- Added ECLMinifier struct for producing compact single-line ECL output
+- Added `minifyECL()` and `toggleECLFormat()` public functions
 - Added ECLFormatHotKeySettings singleton for hotkey configuration
 - Extended SettingsView with ECL Format Hotkey section
-- Added 47 unit tests for ECL lexer, parser, formatter, and hotkey settings
+- Added 57 unit tests for ECL lexer, parser, formatter, minifier, and hotkey settings
 - Extended `ConceptMatch` struct with `existingTerm` field to track pipe-delimited terms
 - Updated `extractAllConceptIds(from:)` to detect existing `| term |` patterns
 - Refactored `replaceSelection()` with toggle logic for add/update/remove modes

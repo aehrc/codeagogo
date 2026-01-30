@@ -261,6 +261,136 @@ final class OntoserverClientTests: XCTestCase {
     }
 }
 
+// MARK: - Batch Lookup Tests
+
+    func testParseBatchLookupResponse() throws {
+        // Sample response from ValueSet/$expand with includeDesignations
+        let json = """
+        {
+            "resourceType": "ValueSet",
+            "expansion": {
+                "total": 2,
+                "contains": [
+                    {
+                        "system": "http://snomed.info/sct",
+                        "code": "73211009",
+                        "display": "Diabetes mellitus",
+                        "designation": [
+                            {
+                                "use": {"code": "900000000000003001"},
+                                "value": "Diabetes mellitus (disorder)"
+                            }
+                        ]
+                    },
+                    {
+                        "system": "http://snomed.info/sct",
+                        "code": "385804009",
+                        "display": "Diabetic care",
+                        "designation": [
+                            {
+                                "use": {"code": "900000000000003001"},
+                                "value": "Diabetic care (regime/therapy)"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+        """.data(using: .utf8)!
+
+        let response = try JSONDecoder().decode(ValueSetExpansionResponse.self, from: json)
+
+        XCTAssertEqual(response.resourceType, "ValueSet")
+        XCTAssertEqual(response.expansion?.total, 2)
+        XCTAssertEqual(response.expansion?.contains?.count, 2)
+
+        let firstConcept = response.expansion?.contains?.first
+        XCTAssertEqual(firstConcept?.code, "73211009")
+        XCTAssertEqual(firstConcept?.display, "Diabetes mellitus")
+        XCTAssertEqual(firstConcept?.designation?.first?.value, "Diabetes mellitus (disorder)")
+        XCTAssertEqual(firstConcept?.designation?.first?.use?.code, "900000000000003001")
+    }
+
+    func testBatchLookupResultAccessors() {
+        let result = OntoserverClient.BatchLookupResult(
+            ptByCode: [
+                "73211009": "Diabetes mellitus",
+                "385804009": "Diabetic care"
+            ],
+            fsnByCode: [
+                "73211009": "Diabetes mellitus (disorder)",
+                "385804009": "Diabetic care (regime/therapy)"
+            ]
+        )
+
+        // Test PT accessors
+        XCTAssertEqual(result.pt(for: "73211009"), "Diabetes mellitus")
+        XCTAssertEqual(result.pt(for: "385804009"), "Diabetic care")
+        XCTAssertNil(result.pt(for: "99999999"))
+
+        // Test FSN accessors
+        XCTAssertEqual(result.fsn(for: "73211009"), "Diabetes mellitus (disorder)")
+        XCTAssertEqual(result.fsn(for: "385804009"), "Diabetic care (regime/therapy)")
+        XCTAssertNil(result.fsn(for: "99999999"))
+    }
+
+    func testBatchLookupEmptyResponse() throws {
+        let json = """
+        {
+            "resourceType": "ValueSet",
+            "expansion": {
+                "total": 0
+            }
+        }
+        """.data(using: .utf8)!
+
+        let response = try JSONDecoder().decode(ValueSetExpansionResponse.self, from: json)
+
+        XCTAssertEqual(response.expansion?.total, 0)
+        XCTAssertNil(response.expansion?.contains)
+    }
+
+    func testBatchLookupPartialDesignations() throws {
+        // Test case where some concepts have FSN designation, others don't
+        let json = """
+        {
+            "resourceType": "ValueSet",
+            "expansion": {
+                "total": 2,
+                "contains": [
+                    {
+                        "system": "http://snomed.info/sct",
+                        "code": "73211009",
+                        "display": "Diabetes mellitus",
+                        "designation": [
+                            {
+                                "use": {"code": "900000000000003001"},
+                                "value": "Diabetes mellitus (disorder)"
+                            }
+                        ]
+                    },
+                    {
+                        "system": "http://snomed.info/sct",
+                        "code": "385804009",
+                        "display": "Diabetic care"
+                    }
+                ]
+            }
+        }
+        """.data(using: .utf8)!
+
+        let response = try JSONDecoder().decode(ValueSetExpansionResponse.self, from: json)
+
+        let contains = response.expansion?.contains
+        XCTAssertEqual(contains?.count, 2)
+
+        // First concept has designation
+        XCTAssertEqual(contains?[0].designation?.count, 1)
+
+        // Second concept has no designation
+        XCTAssertNil(contains?[1].designation)
+    }
+
 // MARK: - Mock URLSession for Future Tests
 
 /// Protocol for URLSession to enable mocking

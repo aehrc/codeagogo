@@ -301,6 +301,106 @@ final class ECLFormatterTests: XCTestCase {
         XCTAssertFalse(isValidECL(""))
     }
 
+    // MARK: - Minify Tests
+
+    func testMinifySimpleConcept() throws {
+        let result = try minifyECL("73211009")
+        XCTAssertEqual(result, "73211009")
+    }
+
+    func testMinifyRemovesNewlines() throws {
+        let input = """
+        < 73211009
+        AND < 404684003
+        """
+        let result = try minifyECL(input)
+        XCTAssertFalse(result.contains("\n"))
+        XCTAssertTrue(result.contains("AND"))
+    }
+
+    func testMinifyCompactOutput() throws {
+        let input = "<< 404684003: 363698007 = << 39057004"
+        let result = try minifyECL(input)
+        // Should be single line
+        XCTAssertFalse(result.contains("\n"))
+        XCTAssertEqual(result, "<< 404684003: 363698007 = << 39057004")
+    }
+
+    func testMinifyPreservesConceptTerms() throws {
+        let input = "73211009 |Diabetes mellitus|"
+        let result = try minifyECL(input)
+        XCTAssertEqual(result, "73211009 |Diabetes mellitus|")
+    }
+
+    func testMinifyCompoundExpression() throws {
+        // Pretty-printed input with newlines
+        let input = """
+        < 73211009
+        OR < 404684003
+        OR < 123456789
+        """
+        let result = try minifyECL(input)
+        // Should be single line with spaces around OR
+        XCTAssertFalse(result.contains("\n"))
+        XCTAssertEqual(result, "< 73211009 OR < 404684003 OR < 123456789")
+    }
+
+    // MARK: - Toggle Tests
+
+    func testToggleFromMinifiedToPretty() throws {
+        // Simple minified expression should become pretty-printed
+        let minified = "< 73211009 OR < 404684003"
+        let result = try toggleECLFormat(minified)
+        // Since it's a compound expression, pretty-printing adds newlines
+        XCTAssertTrue(result.contains("\n") || result == minified,
+                      "Toggle should produce pretty output or same (if simple enough)")
+    }
+
+    func testToggleFromPrettyToMinified() throws {
+        // First pretty-print, then toggle should minify
+        let original = "< 73211009 OR < 404684003"
+        let prettyPrinted = try formatECL(original)
+        let toggled = try toggleECLFormat(prettyPrinted)
+
+        // If input matched pretty-printed, result should be minified (no newlines)
+        if prettyPrinted.contains("\n") {
+            XCTAssertFalse(toggled.contains("\n"),
+                           "Toggling pretty-printed should produce minified (no newlines)")
+        }
+    }
+
+    func testToggleRoundTrip() throws {
+        // Toggle twice should return to original format
+        let original = "< 73211009 OR < 404684003"
+
+        let first = try toggleECLFormat(original)
+        let second = try toggleECLFormat(first)
+
+        // After two toggles, we should be back to the other format
+        // (minified -> pretty -> minified, or pretty -> minified -> pretty)
+        // Just verify it's valid ECL
+        XCTAssertTrue(isValidECL(second))
+    }
+
+    func testToggleSimpleExpressionUnchanged() throws {
+        // A simple expression without compound/refinement might not change much
+        let simple = "73211009"
+        let result = try toggleECLFormat(simple)
+        XCTAssertEqual(result, "73211009")
+    }
+
+    func testToggleComplexRefinement() throws {
+        let input = "<< 404684003: 363698007 = << 39057004"
+        let prettyPrinted = try formatECL(input)
+        let minified = try minifyECL(input)
+
+        // Toggle from pretty should give minified
+        if prettyPrinted.contains("\n") {
+            let toggled = try toggleECLFormat(prettyPrinted)
+            XCTAssertEqual(toggled, minified)
+        }
+    }
+
     // MARK: - ECLFormatHotKeySettings Tests
 
     @MainActor

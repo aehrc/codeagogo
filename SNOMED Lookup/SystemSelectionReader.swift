@@ -197,6 +197,7 @@ final class SystemSelectionReader {
         return true
     }
 
+
     /// Converts a string to a debug representation with visible whitespace.
     ///
     /// Used for debug logging to make whitespace characters visible:

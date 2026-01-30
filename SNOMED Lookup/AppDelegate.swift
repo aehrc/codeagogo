@@ -316,16 +316,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
     }
 
-    /// Formats the selected ECL expression for improved readability.
+    /// Toggles the selected ECL expression between pretty-printed and minified formats.
     ///
     /// This method reads the current selection, attempts to parse it as an ECL
-    /// expression, and if successful, replaces it with a pretty-printed version.
+    /// expression, and if successful, replaces it with a toggled format:
+    /// - If the selection is pretty-printed → replaces with minified
+    /// - If the selection is minified or irregular → replaces with pretty-printed
+    ///
     /// If the selection is not valid ECL, a system beep is played.
     @objc private func formatECLSelection() {
         Task { @MainActor in
             do {
+                let reader = SystemSelectionReader()
+
                 // 1. Read selection
-                let text = try SystemSelectionReader().readSelectionByCopying()
+                let text = try reader.readSelectionByCopying()
 
                 guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     NSSound.beep()
@@ -333,30 +338,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     return
                 }
 
-                // 2. Try to format as ECL
-                let formatted: String
+                // 2. Try to toggle ECL format (pretty ↔ minified)
+                let toggled: String
                 do {
-                    formatted = try formatECL(text)
+                    toggled = try toggleECLFormat(text)
                 } catch {
                     NSSound.beep()
                     AppLog.warning(AppLog.ui, "ECL format failed: \(error)")
                     return
                 }
 
-                // 3. Put formatted text on clipboard
+                // 3. Put toggled text on clipboard
                 let pb = NSPasteboard.general
                 pb.clearContents()
-                pb.setString(formatted, forType: .string)
+                pb.setString(toggled, forType: .string)
 
                 // 4. Small delay to ensure clipboard is ready
                 try await Task.sleep(nanoseconds: 50_000_000)  // 50ms
 
                 // 5. Send Cmd+V to replace selection
-                if !SystemSelectionReader().sendCmdV() {
+                if !reader.sendCmdV() {
                     throw LookupError.accessibilityPermissionLikelyMissing
                 }
 
-                AppLog.info(AppLog.ui, "Formatted ECL expression")
+                let action = toggled.contains("\n") ? "Pretty-printed" : "Minified"
+                AppLog.info(AppLog.ui, "\(action) ECL expression")
 
             } catch {
                 NSSound.beep()
@@ -380,11 +386,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// - `385804009 | Wrong term | and 73211009` → updates both to correct terms
     ///
     /// If no valid concept IDs are found, a system beep is played.
+    ///
+    /// ## Performance
+    ///
+    /// Uses `ValueSet/$expand` batch lookup to fetch all concept terms in a single
+    /// API request (~0.5s for 62 codes), rather than individual lookups (~7+ seconds).
     @objc private func replaceSelection() {
         Task { @MainActor in
             do {
+                let reader = SystemSelectionReader()
+
                 // 1. Read selection
-                let text = try SystemSelectionReader().readSelectionByCopying()
+                let text = try reader.readSelectionByCopying()
 
                 // 2. Extract all concept IDs with their positions and existing terms
                 let matches = model.extractAllConceptIds(from: text)
@@ -395,11 +408,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     return
                 }
 
-                // 3. Look up all concepts with limited concurrency to avoid overwhelming the server
+                // 3. Look up all concepts using batch lookup (ValueSet/$expand)
                 let client = OntoserverClient()
                 let uniqueIds = Array(Set(matches.map { $0.conceptId }))
-                let maxConcurrentLookups = 5
-                let totalBatches = (uniqueIds.count + maxConcurrentLookups - 1) / maxConcurrentLookups
 
                 // Show progress HUD for operations with multiple concepts
                 let showProgress = uniqueIds.count > 3
@@ -407,76 +418,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     progressHUD.show(message: "Looking up \(uniqueIds.count) concepts...")
                 }
 
-                var lookupResults: [String: ConceptResult] = [:]
-                var failedCount = 0
-                var completedBatches = 0
-
-                // Process in batches to limit concurrent requests
-                for batchStart in stride(from: 0, to: uniqueIds.count, by: maxConcurrentLookups) {
-                    let batchEnd = min(batchStart + maxConcurrentLookups, uniqueIds.count)
-                    let batch = Array(uniqueIds[batchStart..<batchEnd])
-
-                    let batchResults = await withTaskGroup(
-                        of: (String, ConceptResult?).self,
-                        returning: [(String, ConceptResult?)].self
-                    ) { group in
-                        for conceptId in batch {
-                            group.addTask {
-                                do {
-                                    let result = try await client.lookup(conceptId: conceptId)
-                                    return (conceptId, result)
-                                } catch {
-                                    AppLog.warning(AppLog.ui, "Lookup failed for \(conceptId): \(error)")
-                                    return (conceptId, nil)
-                                }
-                            }
-                        }
-
-                        var results: [(String, ConceptResult?)] = []
-                        for await result in group {
-                            results.append(result)
-                        }
-                        return results
-                    }
-
-                    for (conceptId, result) in batchResults {
-                        if let result {
-                            lookupResults[conceptId] = result
-                        } else {
-                            failedCount += 1
-                        }
-                    }
-
-                    // Update progress
-                    completedBatches += 1
-                    if showProgress {
-                        let progress = Double(completedBatches) / Double(totalBatches)
-                        let completed = min(batchEnd, uniqueIds.count)
-                        progressHUD.update(
-                            message: "Looking up concepts (\(completed)/\(uniqueIds.count))...",
-                            progress: progress
-                        )
-                    }
-                }
+                let batchResult = try await client.batchLookup(conceptIds: uniqueIds)
 
                 // Hide progress HUD
                 if showProgress {
                     progressHUD.hide()
                 }
 
-                if failedCount > 0 {
-                    AppLog.warning(AppLog.ui, "Replace: \(failedCount) of \(uniqueIds.count) concept lookups failed")
+                let foundCount = batchResult.ptByCode.count
+                let notFoundCount = uniqueIds.count - foundCount
+                if notFoundCount > 0 {
+                    AppLog.warning(AppLog.ui, "Replace: \(notFoundCount) of \(uniqueIds.count) concepts not found")
                 }
 
                 // 4. Capture term format setting and define helper
                 let termFormat = replaceSettings.termFormat
                 func expectedTerm(for conceptId: String) -> String? {
-                    guard let lookupResult = lookupResults[conceptId] else { return nil }
                     switch termFormat {
                     case .fsn:
-                        return lookupResult.fsn ?? lookupResult.pt
+                        return batchResult.fsn(for: conceptId) ?? batchResult.pt(for: conceptId)
                     case .pt:
-                        return lookupResult.pt ?? lookupResult.fsn
+                        return batchResult.pt(for: conceptId) ?? batchResult.fsn(for: conceptId)
                     }
                 }
 
@@ -520,15 +482,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 try await Task.sleep(nanoseconds: 50_000_000)  // 50ms
 
                 // 9. Send Cmd+V to replace selection
-                if !SystemSelectionReader().sendCmdV() {
+                if !reader.sendCmdV() {
                     throw LookupError.accessibilityPermissionLikelyMissing
                 }
 
                 let action = allCorrect ? "Removed terms from" : "Added/updated terms for"
-                let successCount = lookupResults.count
-                let totalCount = uniqueIds.count
-                if successCount < totalCount {
-                    AppLog.info(AppLog.ui, "\(action) \(matches.count) concept IDs (\(successCount)/\(totalCount) lookups succeeded)")
+                if notFoundCount > 0 {
+                    AppLog.info(AppLog.ui, "\(action) \(matches.count) concept IDs (\(foundCount)/\(uniqueIds.count) found)")
                 } else {
                     AppLog.info(AppLog.ui, "\(action) \(matches.count) concept IDs")
                 }
