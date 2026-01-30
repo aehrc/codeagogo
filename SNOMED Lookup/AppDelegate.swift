@@ -55,6 +55,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Shared settings for the replace term format.
     private let replaceSettings = ReplaceSettings.shared
 
+    /// Shared settings for the ECL format hotkey configuration.
+    private let eclFormatHotKeySettings = ECLFormatHotKeySettings.shared
+
     /// The currently registered global hotkey handler for lookup.
     private var hotKey: GlobalHotKey?
 
@@ -63,6 +66,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// The currently registered global hotkey handler for replace.
     private var replaceHotKey: GlobalHotKey?
+
+    /// The currently registered global hotkey handler for ECL formatting.
+    private var eclFormatHotKey: GlobalHotKey?
 
     /// The search panel controller for the concept search feature.
     private let searchPanel = SearchPanelController()
@@ -75,6 +81,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// The app that was active before showing the popover, for restoring focus.
     private var previousApp: NSRunningApplication?
+
+    /// Progress HUD for showing feedback during long operations.
+    private let progressHUD = ProgressHUD()
 
     /// Called when the application finishes launching.
     ///
@@ -89,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupHotKey()
         setupSearchHotKey()
         setupReplaceHotKey()
+        setupECLFormatHotKey()
     }
 
     /// Handles reopen events (e.g., clicking the Dock icon).
@@ -273,6 +283,88 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
     }
 
+    /// Registers the ECL format hotkey and sets up observation for settings changes.
+    ///
+    /// The ECL format hotkey pretty-prints selected ECL expressions for improved
+    /// readability. Settings changes take effect immediately.
+    private func setupECLFormatHotKey() {
+        // Initial registration with current settings (using thread-safe accessors)
+        eclFormatHotKey = GlobalHotKey(
+            keyCode: ECLFormatHotKeySettings.currentKeyCode,
+            modifiers: ECLFormatHotKeySettings.currentModifiers,
+            id: 4  // Use id=4 to distinguish from other hotkeys
+        ) { [weak self] in
+            self?.formatECLSelection()
+        }
+        eclFormatHotKey?.start()
+
+        // Update hotkey live when settings change
+        Publishers.CombineLatest(eclFormatHotKeySettings.$keyCode, eclFormatHotKeySettings.$modifiersRaw)
+            .dropFirst()  // Skip initial value emission
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newKeyCode, newModifiersRaw in
+                guard let self else { return }
+                self.eclFormatHotKeySettings.save()
+                // Convert raw modifiers to NSEvent.ModifierFlags
+                var mods: NSEvent.ModifierFlags = []
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.control])) != 0 { mods.insert(.control) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.option])) != 0 { mods.insert(.option) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
+                self.eclFormatHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Formats the selected ECL expression for improved readability.
+    ///
+    /// This method reads the current selection, attempts to parse it as an ECL
+    /// expression, and if successful, replaces it with a pretty-printed version.
+    /// If the selection is not valid ECL, a system beep is played.
+    @objc private func formatECLSelection() {
+        Task { @MainActor in
+            do {
+                // 1. Read selection
+                let text = try SystemSelectionReader().readSelectionByCopying()
+
+                guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    NSSound.beep()
+                    AppLog.warning(AppLog.ui, "ECL format failed: empty selection")
+                    return
+                }
+
+                // 2. Try to format as ECL
+                let formatted: String
+                do {
+                    formatted = try formatECL(text)
+                } catch {
+                    NSSound.beep()
+                    AppLog.warning(AppLog.ui, "ECL format failed: \(error)")
+                    return
+                }
+
+                // 3. Put formatted text on clipboard
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.setString(formatted, forType: .string)
+
+                // 4. Small delay to ensure clipboard is ready
+                try await Task.sleep(nanoseconds: 50_000_000)  // 50ms
+
+                // 5. Send Cmd+V to replace selection
+                if !SystemSelectionReader().sendCmdV() {
+                    throw LookupError.accessibilityPermissionLikelyMissing
+                }
+
+                AppLog.info(AppLog.ui, "Formatted ECL expression")
+
+            } catch {
+                NSSound.beep()
+                AppLog.error(AppLog.ui, "ECL format failed: \(error)")
+            }
+        }
+    }
+
     /// Toggles pipe-delimited terms for all SNOMED CT concept IDs in the selection.
     ///
     /// This method implements smart toggle behavior:
@@ -303,33 +395,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     return
                 }
 
-                // 3. Look up all concepts in parallel
+                // 3. Look up all concepts with limited concurrency to avoid overwhelming the server
                 let client = OntoserverClient()
-                let lookupResults = await withTaskGroup(
-                    of: (String, ConceptResult?).self,
-                    returning: [String: ConceptResult].self
-                ) { group in
-                    let uniqueIds = Set(matches.map { $0.conceptId })
+                let uniqueIds = Array(Set(matches.map { $0.conceptId }))
+                let maxConcurrentLookups = 5
+                let totalBatches = (uniqueIds.count + maxConcurrentLookups - 1) / maxConcurrentLookups
 
-                    for conceptId in uniqueIds {
-                        group.addTask {
-                            do {
-                                let result = try await client.lookup(conceptId: conceptId)
-                                return (conceptId, result)
-                            } catch {
-                                AppLog.warning(AppLog.ui, "Lookup failed for \(conceptId): \(error)")
-                                return (conceptId, nil)
+                // Show progress HUD for operations with multiple concepts
+                let showProgress = uniqueIds.count > 3
+                if showProgress {
+                    progressHUD.show(message: "Looking up \(uniqueIds.count) concepts...")
+                }
+
+                var lookupResults: [String: ConceptResult] = [:]
+                var failedCount = 0
+                var completedBatches = 0
+
+                // Process in batches to limit concurrent requests
+                for batchStart in stride(from: 0, to: uniqueIds.count, by: maxConcurrentLookups) {
+                    let batchEnd = min(batchStart + maxConcurrentLookups, uniqueIds.count)
+                    let batch = Array(uniqueIds[batchStart..<batchEnd])
+
+                    let batchResults = await withTaskGroup(
+                        of: (String, ConceptResult?).self,
+                        returning: [(String, ConceptResult?)].self
+                    ) { group in
+                        for conceptId in batch {
+                            group.addTask {
+                                do {
+                                    let result = try await client.lookup(conceptId: conceptId)
+                                    return (conceptId, result)
+                                } catch {
+                                    AppLog.warning(AppLog.ui, "Lookup failed for \(conceptId): \(error)")
+                                    return (conceptId, nil)
+                                }
                             }
                         }
+
+                        var results: [(String, ConceptResult?)] = []
+                        for await result in group {
+                            results.append(result)
+                        }
+                        return results
                     }
 
-                    var results: [String: ConceptResult] = [:]
-                    for await (conceptId, result) in group {
+                    for (conceptId, result) in batchResults {
                         if let result {
-                            results[conceptId] = result
+                            lookupResults[conceptId] = result
+                        } else {
+                            failedCount += 1
                         }
                     }
-                    return results
+
+                    // Update progress
+                    completedBatches += 1
+                    if showProgress {
+                        let progress = Double(completedBatches) / Double(totalBatches)
+                        let completed = min(batchEnd, uniqueIds.count)
+                        progressHUD.update(
+                            message: "Looking up concepts (\(completed)/\(uniqueIds.count))...",
+                            progress: progress
+                        )
+                    }
+                }
+
+                // Hide progress HUD
+                if showProgress {
+                    progressHUD.hide()
+                }
+
+                if failedCount > 0 {
+                    AppLog.warning(AppLog.ui, "Replace: \(failedCount) of \(uniqueIds.count) concept lookups failed")
                 }
 
                 // 4. Capture term format setting and define helper
@@ -389,9 +525,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
 
                 let action = allCorrect ? "Removed terms from" : "Added/updated terms for"
-                AppLog.info(AppLog.ui, "\(action) \(matches.count) concept IDs")
+                let successCount = lookupResults.count
+                let totalCount = uniqueIds.count
+                if successCount < totalCount {
+                    AppLog.info(AppLog.ui, "\(action) \(matches.count) concept IDs (\(successCount)/\(totalCount) lookups succeeded)")
+                } else {
+                    AppLog.info(AppLog.ui, "\(action) \(matches.count) concept IDs")
+                }
 
             } catch {
+                progressHUD.hide()
                 NSSound.beep()
                 AppLog.error(AppLog.ui, "Replace failed: \(error)")
             }

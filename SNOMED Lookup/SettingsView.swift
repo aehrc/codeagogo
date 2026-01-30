@@ -7,6 +7,7 @@ struct SettingsView: View {
     @ObservedObject private var searchSettings = SearchSettings.shared
     @ObservedObject private var replaceHk = ReplaceHotKeySettings.shared
     @ObservedObject private var replaceSettings = ReplaceSettings.shared
+    @ObservedObject private var eclFormatHk = ECLFormatHotKeySettings.shared
 
     // Logging setting persisted in UserDefaults
     @AppStorage(AppLog.debugKey) private var debugLoggingEnabled: Bool = false
@@ -30,6 +31,13 @@ struct SettingsView: View {
         ("Y", UInt32(kVK_ANSI_Y)),
         ("K", UInt32(kVK_ANSI_K)),
         ("U", UInt32(kVK_ANSI_U))
+    ]
+
+    private let eclFormatKeys: [(String, UInt32)] = [
+        ("E", UInt32(kVK_ANSI_E)),
+        ("F", UInt32(kVK_ANSI_F)),
+        ("P", UInt32(kVK_ANSI_P)),
+        ("M", UInt32(kVK_ANSI_M))
     ]
 
     var body: some View {
@@ -119,6 +127,30 @@ struct SettingsView: View {
                     .padding(.top, 4)
                 }
 
+                GroupBox("ECL Format Hotkey") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Key")
+                            Picker("", selection: $eclFormatHk.keyCode) {
+                                ForEach(eclFormatKeys, id: \.1) { item in
+                                    Text(item.0).tag(item.1)
+                                }
+                            }
+                            .frame(width: 120)
+                            .accessibilityIdentifier("settings.eclFormatHotkeyKey")
+                            .accessibilityLabel("ECL format hotkey letter")
+                            .accessibilityHint("Select the letter key for the ECL format hotkey")
+                        }
+
+                        modifierToggles(for: .eclFormat)
+
+                        Text("Formats selected ECL expression for readability.")
+                            .foregroundStyle(.secondary)
+                            .font(.footnote)
+                    }
+                    .padding(.top, 4)
+                }
+
                 GroupBox("Insert Format") {
                     VStack(alignment: .leading, spacing: 10) {
                         Picker("Default format:", selection: $searchSettings.selectedFormat) {
@@ -198,7 +230,7 @@ struct SettingsView: View {
             }
             .padding(16)
         }
-        .frame(width: 520, height: 680)
+        .frame(width: 520, height: 780)
     }
 
     // MARK: - Modifier Toggles
@@ -207,12 +239,14 @@ struct SettingsView: View {
         case lookup
         case search
         case replace
+        case eclFormat
 
         var accessibilityPrefix: String {
             switch self {
             case .lookup: return "settings.lookup"
             case .search: return "settings.search"
             case .replace: return "settings.replace"
+            case .eclFormat: return "settings.eclFormat"
             }
         }
     }
@@ -250,6 +284,8 @@ struct SettingsView: View {
                     return (searchHk.modifiersRaw & raw) != 0
                 case .replace:
                     return (replaceHk.modifiersRaw & raw) != 0
+                case .eclFormat:
+                    return (eclFormatHk.modifiersRaw & raw) != 0
                 }
             },
             set: { on in
@@ -272,6 +308,12 @@ struct SettingsView: View {
                         replaceHk.modifiersRaw |= raw
                     } else {
                         replaceHk.modifiersRaw &= ~raw
+                    }
+                case .eclFormat:
+                    if on {
+                        eclFormatHk.modifiersRaw |= raw
+                    } else {
+                        eclFormatHk.modifiersRaw &= ~raw
                     }
                 }
             }

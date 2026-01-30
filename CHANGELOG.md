@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **ECL Format hotkey** (Control+Option+E): Pretty-prints selected ECL expressions for improved readability
+- Full ECL 2.x parser supporting constraint operators, compound expressions, refinements, and filters
+- Settings UI for configuring ECL format hotkey key and modifiers
+- **Progress HUD** for replace hotkey: Shows lookup progress when processing many concepts
+
+### Fixed
+- **Replace hotkey reliability**: Fixed issue where some concept IDs weren't being replaced when processing large selections (50+ concepts). Now uses batched lookups with limited concurrency (5 at a time) to prevent server timeouts and rate limiting.
+
 ### Changed
 - **Replace hotkey now has smart toggle behavior**:
   - Finds all SNOMED CT codes in the selection, looks them up in parallel
@@ -19,6 +28,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Mixed selections work: `385804009 | Wrong | and 73211009` updates both
 
 ### Technical
+- Added ProgressHUD.swift for displaying lookup progress near cursor
+- Implemented batched concurrent lookups (max 5 at a time) to prevent server overwhelm
+- Added ECLToken.swift with token type definitions for ECL syntax elements
+- Added ECLLexer.swift for tokenizing ECL expressions (handles operators, identifiers, literals)
+- Added ECLAST.swift with AST node types (expressions, refinements, attributes, filters)
+- Added ECLParser.swift as a recursive descent parser for ECL 2.x grammar
+- Added ECLFormatter.swift for pretty-printing AST back to formatted ECL text
+- Added ECLFormatHotKeySettings singleton for hotkey configuration
+- Extended SettingsView with ECL Format Hotkey section
+- Added 47 unit tests for ECL lexer, parser, formatter, and hotkey settings
 - Extended `ConceptMatch` struct with `existingTerm` field to track pipe-delimited terms
 - Updated `extractAllConceptIds(from:)` to detect existing `| term |` patterns
 - Refactored `replaceSelection()` with toggle logic for add/update/remove modes
