@@ -136,6 +136,194 @@ final class ConceptIdExtractionTests: XCTestCase {
         XCTAssertEqual(conceptId, "73211009")
     }
 
+    // MARK: - Multiple Concept ID Extraction Tests
+
+    func testExtractAllConceptIdsFromMultipleCodes() async {
+        let text = "385804009 and this other code 999000001000168109"
+        let matches = await MainActor.run {
+            let vm = LookupViewModel()
+            return vm.extractAllConceptIds(from: text)
+        }
+
+        XCTAssertEqual(matches.count, 2)
+        XCTAssertEqual(matches[0].conceptId, "385804009")
+        XCTAssertNil(matches[0].existingTerm)
+        XCTAssertEqual(matches[1].conceptId, "999000001000168109")
+        XCTAssertNil(matches[1].existingTerm)
+    }
+
+    func testExtractAllConceptIdsPreservesOrder() async {
+        let text = "First: 73211009, Second: 404684003, Third: 387458008"
+        let matches = await MainActor.run {
+            let vm = LookupViewModel()
+            return vm.extractAllConceptIds(from: text)
+        }
+
+        XCTAssertEqual(matches.count, 3)
+        XCTAssertEqual(matches[0].conceptId, "73211009")
+        XCTAssertEqual(matches[1].conceptId, "404684003")
+        XCTAssertEqual(matches[2].conceptId, "387458008")
+    }
+
+    func testExtractAllConceptIdsWithDuplicates() async {
+        let text = "73211009 appears twice: 73211009"
+        let matches = await MainActor.run {
+            let vm = LookupViewModel()
+            return vm.extractAllConceptIds(from: text)
+        }
+
+        XCTAssertEqual(matches.count, 2)
+        XCTAssertEqual(matches[0].conceptId, "73211009")
+        XCTAssertEqual(matches[1].conceptId, "73211009")
+    }
+
+    func testExtractAllConceptIdsEmptyForNoMatches() async {
+        let text = "No concept IDs here, just text"
+        let matches = await MainActor.run {
+            let vm = LookupViewModel()
+            return vm.extractAllConceptIds(from: text)
+        }
+
+        XCTAssertTrue(matches.isEmpty)
+    }
+
+    func testExtractAllConceptIdsSingleCode() async {
+        let text = "Just one code: 73211009"
+        let matches = await MainActor.run {
+            let vm = LookupViewModel()
+            return vm.extractAllConceptIds(from: text)
+        }
+
+        XCTAssertEqual(matches.count, 1)
+        XCTAssertEqual(matches[0].conceptId, "73211009")
+        XCTAssertNil(matches[0].existingTerm)
+    }
+
+    func testExtractAllConceptIdsRangesAreCorrect() async {
+        let text = "Code 73211009 is here"
+        let matches = await MainActor.run {
+            let vm = LookupViewModel()
+            return vm.extractAllConceptIds(from: text)
+        }
+
+        XCTAssertEqual(matches.count, 1)
+        XCTAssertEqual(String(text[matches[0].range]), "73211009")
+    }
+
+    func testExtractAllConceptIdsReplacementPreservesText() async {
+        let text = "385804009 and this other code 999000001000168109"
+        let matches = await MainActor.run {
+            let vm = LookupViewModel()
+            return vm.extractAllConceptIds(from: text)
+        }
+
+        // Simulate replacement (reverse order to preserve indices)
+        var result = text
+        for match in matches.reversed() {
+            let replacement = "\(match.conceptId) | Term |"
+            result.replaceSubrange(match.range, with: replacement)
+        }
+
+        XCTAssertEqual(result, "385804009 | Term | and this other code 999000001000168109 | Term |")
+    }
+
+    // MARK: - Existing Term Detection Tests
+
+    func testExtractDetectsExistingPipeDelimitedTerm() async {
+        let text = "73211009 | Diabetes mellitus |"
+        let matches = await MainActor.run {
+            let vm = LookupViewModel()
+            return vm.extractAllConceptIds(from: text)
+        }
+
+        XCTAssertEqual(matches.count, 1)
+        XCTAssertEqual(matches[0].conceptId, "73211009")
+        XCTAssertEqual(matches[0].existingTerm, "Diabetes mellitus")
+    }
+
+    func testExtractDetectsExistingTermWithExtraWhitespace() async {
+        let text = "73211009  |  Diabetes mellitus  |"
+        let matches = await MainActor.run {
+            let vm = LookupViewModel()
+            return vm.extractAllConceptIds(from: text)
+        }
+
+        XCTAssertEqual(matches.count, 1)
+        XCTAssertEqual(matches[0].existingTerm, "Diabetes mellitus")
+    }
+
+    func testExtractMixedCodesWithAndWithoutTerms() async {
+        let text = "73211009 | Diabetes | and 385804009"
+        let matches = await MainActor.run {
+            let vm = LookupViewModel()
+            return vm.extractAllConceptIds(from: text)
+        }
+
+        XCTAssertEqual(matches.count, 2)
+        XCTAssertEqual(matches[0].conceptId, "73211009")
+        XCTAssertEqual(matches[0].existingTerm, "Diabetes")
+        XCTAssertEqual(matches[1].conceptId, "385804009")
+        XCTAssertNil(matches[1].existingTerm)
+    }
+
+    func testExtractRangeIncludesPipeDelimitedTerm() async {
+        let text = "Code: 73211009 | Diabetes | is here"
+        let matches = await MainActor.run {
+            let vm = LookupViewModel()
+            return vm.extractAllConceptIds(from: text)
+        }
+
+        XCTAssertEqual(matches.count, 1)
+        XCTAssertEqual(String(text[matches[0].range]), "73211009 | Diabetes |")
+    }
+
+    func testExtractMultipleCodesAllWithTerms() async {
+        let text = "73211009 | Diabetes | and 385804009 | Diabetic care |"
+        let matches = await MainActor.run {
+            let vm = LookupViewModel()
+            return vm.extractAllConceptIds(from: text)
+        }
+
+        XCTAssertEqual(matches.count, 2)
+        XCTAssertEqual(matches[0].existingTerm, "Diabetes")
+        XCTAssertEqual(matches[1].existingTerm, "Diabetic care")
+    }
+
+    func testRemoveTermsSimulation() async {
+        // Simulate the "remove" toggle behavior
+        let text = "73211009 | Diabetes | and 385804009 | Diabetic care |"
+        let matches = await MainActor.run {
+            let vm = LookupViewModel()
+            return vm.extractAllConceptIds(from: text)
+        }
+
+        // Replace in reverse order with just the concept IDs
+        var result = text
+        for match in matches.reversed() {
+            result.replaceSubrange(match.range, with: match.conceptId)
+        }
+
+        XCTAssertEqual(result, "73211009 and 385804009")
+    }
+
+    func testUpdateTermsSimulation() async {
+        // Simulate updating wrong terms to correct ones
+        let text = "73211009 | Wrong term | and 385804009"
+        let matches = await MainActor.run {
+            let vm = LookupViewModel()
+            return vm.extractAllConceptIds(from: text)
+        }
+
+        // Replace with "correct" terms
+        var result = text
+        for match in matches.reversed() {
+            let newTerm = match.conceptId == "73211009" ? "Diabetes mellitus" : "Diabetic care"
+            result.replaceSubrange(match.range, with: "\(match.conceptId) | \(newTerm) |")
+        }
+
+        XCTAssertEqual(result, "73211009 | Diabetes mellitus | and 385804009 | Diabetic care |")
+    }
+
     // MARK: - Helper
 
     /// Mirrors the extraction logic from LookupViewModel

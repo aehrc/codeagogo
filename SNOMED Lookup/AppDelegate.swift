@@ -273,56 +273,123 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
     }
 
-    /// Replaces the selected SNOMED CT concept ID with the ID plus term in pipe-delimited format.
+    /// Toggles pipe-delimited terms for all SNOMED CT concept IDs in the selection.
     ///
-    /// This method:
-    /// 1. Reads the current selection from the frontmost application
-    /// 2. Extracts a SNOMED CT concept ID from the selection
-    /// 3. Looks up the concept to get the term (FSN or PT based on settings)
-    /// 4. Formats the replacement string as "ID | term |"
-    /// 5. Pastes the replacement to replace the selection
+    /// This method implements smart toggle behavior:
+    /// - **Add mode**: If any code lacks a term or has the wrong term, adds/updates terms for all
+    /// - **Remove mode**: If ALL codes already have correct terms, removes all terms
     ///
-    /// If any step fails (no selection, no valid ID, lookup error), a system beep is played.
+    /// This allows pressing the hotkey repeatedly to toggle between formats:
+    /// 1. `385804009` → `385804009 | Diabetic care |` (add)
+    /// 2. `385804009 | Diabetic care |` → `385804009` (remove, since already correct)
+    /// 3. `385804009` → `385804009 | Diabetic care |` (add again)
+    ///
+    /// Mixed selections work too:
+    /// - `385804009 | Wrong term | and 73211009` → updates both to correct terms
+    ///
+    /// If no valid concept IDs are found, a system beep is played.
     @objc private func replaceSelection() {
         Task { @MainActor in
             do {
                 // 1. Read selection
                 let text = try SystemSelectionReader().readSelectionByCopying()
 
-                // 2. Extract concept ID
-                guard let conceptId = model.extractConceptId(from: text) else {
+                // 2. Extract all concept IDs with their positions and existing terms
+                let matches = model.extractAllConceptIds(from: text)
+
+                guard !matches.isEmpty else {
                     NSSound.beep()
-                    AppLog.warning(AppLog.ui, "Replace failed: no valid concept ID in selection")
+                    AppLog.warning(AppLog.ui, "Replace failed: no valid concept IDs in selection")
                     return
                 }
 
-                // 3. Look up concept
-                let result = try await OntoserverClient().lookup(conceptId: conceptId)
+                // 3. Look up all concepts in parallel
+                let client = OntoserverClient()
+                let lookupResults = await withTaskGroup(
+                    of: (String, ConceptResult?).self,
+                    returning: [String: ConceptResult].self
+                ) { group in
+                    let uniqueIds = Set(matches.map { $0.conceptId })
 
-                // 4. Format replacement string based on settings
-                let term: String
-                switch replaceSettings.termFormat {
-                case .fsn:
-                    term = result.fsn ?? result.pt ?? conceptId
-                case .pt:
-                    term = result.pt ?? result.fsn ?? conceptId
+                    for conceptId in uniqueIds {
+                        group.addTask {
+                            do {
+                                let result = try await client.lookup(conceptId: conceptId)
+                                return (conceptId, result)
+                            } catch {
+                                AppLog.warning(AppLog.ui, "Lookup failed for \(conceptId): \(error)")
+                                return (conceptId, nil)
+                            }
+                        }
+                    }
+
+                    var results: [String: ConceptResult] = [:]
+                    for await (conceptId, result) in group {
+                        if let result {
+                            results[conceptId] = result
+                        }
+                    }
+                    return results
                 }
-                let replacement = "\(conceptId) | \(term) |"
 
-                // 5. Put on clipboard
+                // 4. Capture term format setting and define helper
+                let termFormat = replaceSettings.termFormat
+                func expectedTerm(for conceptId: String) -> String? {
+                    guard let lookupResult = lookupResults[conceptId] else { return nil }
+                    switch termFormat {
+                    case .fsn:
+                        return lookupResult.fsn ?? lookupResult.pt
+                    case .pt:
+                        return lookupResult.pt ?? lookupResult.fsn
+                    }
+                }
+
+                // 5. Check if ALL matches already have correct terms (toggle to remove mode)
+                let allCorrect = matches.allSatisfy { match in
+                    guard let expected = expectedTerm(for: match.conceptId),
+                          let existing = match.existingTerm else {
+                        return false
+                    }
+                    return existing == expected
+                }
+
+                // 6. Build replacement string
+                var result = text
+                for match in matches.reversed() {
+                    let conceptId = match.conceptId
+                    let replacement: String
+
+                    if allCorrect {
+                        // Remove mode: strip the pipe-delimited term
+                        replacement = conceptId
+                    } else {
+                        // Add/update mode
+                        if let term = expectedTerm(for: conceptId) {
+                            replacement = "\(conceptId) | \(term) |"
+                        } else {
+                            // Lookup failed - keep as-is (just the code, or code with existing term)
+                            replacement = String(text[match.range])
+                        }
+                    }
+
+                    result.replaceSubrange(match.range, with: replacement)
+                }
+
+                // 7. Put on clipboard
                 let pb = NSPasteboard.general
                 pb.clearContents()
-                pb.setString(replacement, forType: .string)
+                pb.setString(result, forType: .string)
 
-                // 6. Small delay to ensure clipboard is ready
+                // 8. Small delay to ensure clipboard is ready
                 try await Task.sleep(nanoseconds: 50_000_000)  // 50ms
 
-                // 7. Send Cmd+V to replace selection
+                // 9. Send Cmd+V to replace selection
                 if !SystemSelectionReader().sendCmdV() {
                     throw LookupError.accessibilityPermissionLikelyMissing
                 }
 
-                AppLog.info(AppLog.ui, "Replaced selection with: \(replacement)")
+                let action = allCorrect ? "Removed terms from" : "Added/updated terms for"
+                AppLog.info(AppLog.ui, "\(action) \(matches.count) concept IDs")
 
             } catch {
                 NSSound.beep()

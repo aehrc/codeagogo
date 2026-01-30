@@ -177,6 +177,69 @@ final class LookupViewModel: ObservableObject {
         return String(s[r])
     }
 
+    /// A concept ID match with its location in the original text.
+    struct ConceptMatch {
+        /// The concept ID string (6-18 digits).
+        let conceptId: String
+        /// The range of the entire match in the original text (code + optional pipe-delimited term).
+        let range: Range<String.Index>
+        /// The existing pipe-delimited term, if present (without the pipes).
+        let existingTerm: String?
+    }
+
+    /// Extracts all plausible SNOMED CT concept IDs from text with their positions.
+    ///
+    /// SNOMED CT concept IDs are numeric identifiers between 6 and 18 digits.
+    /// This method finds all such numbers in the input text, using word
+    /// boundaries to avoid matching partial numbers. It also detects if a code
+    /// is followed by a pipe-delimited term (e.g., `385804009 | Diabetic care |`).
+    ///
+    /// - Parameter text: The text to search for concept IDs
+    /// - Returns: An array of matches containing concept IDs, their ranges,
+    ///            and any existing pipe-delimited terms, ordered by position
+    ///
+    /// ## Examples
+    ///
+    /// ```swift
+    /// extractAllConceptIds(from: "73211009 and 385804009")
+    /// // Returns matches with existingTerm = nil
+    ///
+    /// extractAllConceptIds(from: "73211009 | Diabetes | and 385804009")
+    /// // First match has existingTerm = "Diabetes", second has existingTerm = nil
+    /// ```
+    func extractAllConceptIds(from text: String) -> [ConceptMatch] {
+        // Pattern matches: concept ID optionally followed by whitespace and pipe-delimited term
+        // Group 1: concept ID (6-18 digits)
+        // Group 2: optional pipe-delimited term including pipes (e.g., " | Term |")
+        // Group 3: the term text inside the pipes
+        let pattern = #"\b(\d{6,18})(\s*\|\s*([^|]+?)\s*\|)?"#
+        guard let re = try? NSRegularExpression(pattern: pattern) else { return [] }
+
+        let nsRange = NSRange(text.startIndex..<text.endIndex, in: text)
+        let matches = re.matches(in: text, range: nsRange)
+
+        return matches.compactMap { match -> ConceptMatch? in
+            guard match.numberOfRanges >= 2,
+                  let conceptIdRange = Range(match.range(at: 1), in: text)
+            else { return nil }
+
+            let conceptId = String(text[conceptIdRange])
+
+            // Determine the full range (code + optional term)
+            let fullRange = Range(match.range(at: 0), in: text)!
+
+            // Extract existing term if present (group 3)
+            var existingTerm: String?
+            if match.numberOfRanges >= 4,
+               match.range(at: 3).location != NSNotFound,
+               let termRange = Range(match.range(at: 3), in: text) {
+                existingTerm = String(text[termRange]).trimmingCharacters(in: .whitespaces)
+            }
+
+            return ConceptMatch(conceptId: conceptId, range: fullRange, existingTerm: existingTerm)
+        }
+    }
+
     /// Copies a string to the system pasteboard.
     ///
     /// - Parameter s: The string to copy. If `nil` or empty, no action is taken.

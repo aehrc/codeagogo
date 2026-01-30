@@ -4,6 +4,26 @@ All notable changes to SNOMED Lookup are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+- **Replace hotkey now has smart toggle behavior**:
+  - Finds all SNOMED CT codes in the selection, looks them up in parallel
+  - If a code has no term or wrong term → adds/updates the `| term |` suffix
+  - If ALL codes already have correct terms → removes all `| term |` suffixes (toggle off)
+  - Pressing the hotkey repeatedly toggles between "with terms" and "without terms"
+  - Example flow:
+    1. `385804009` → `385804009 | Diabetic care |` (add)
+    2. `385804009 | Diabetic care |` → `385804009` (remove, since correct)
+    3. `385804009` → `385804009 | Diabetic care |` (add again)
+  - Mixed selections work: `385804009 | Wrong | and 73211009` updates both
+
+### Technical
+- Extended `ConceptMatch` struct with `existingTerm` field to track pipe-delimited terms
+- Updated `extractAllConceptIds(from:)` to detect existing `| term |` patterns
+- Refactored `replaceSelection()` with toggle logic for add/update/remove modes
+- Added unit tests for existing term detection and toggle simulation
+
 ## [0.7.0] - 2026-01
 
 ### Added
