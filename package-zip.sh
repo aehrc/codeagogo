@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="SNOMED Lookup"
-SCHEME="SNOMED Lookup"
+APP_NAME="Codeagogo"
+SCHEME="Codeagogo"
 CONFIG="${1:-Release}"
 OUT_DIR="${2:-dist}"
 
@@ -24,7 +24,7 @@ if [[ ! -d "$APP_PATH" ]]; then
   exit 1
 fi
 
-ZIP_PATH="${OUT_DIR}/SNOMED-Lookup-macOS-${CONFIG}.zip"
+ZIP_PATH="${OUT_DIR}/Codeagogo-macOS-${CONFIG}.zip"
 
 echo "Packaging: $ZIP_PATH"
 rm -f "$ZIP_PATH"

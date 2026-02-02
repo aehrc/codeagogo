@@ -10,7 +10,7 @@ When making changes to this codebase, follow these rules:
 
 1. **Update CHANGELOG.md** — Add entries under `[Unreleased]` for any user-facing changes
 2. **Add or update tests** — New functionality needs tests; bug fixes need regression tests
-3. **Run tests before committing** — Ensure all 63+ tests pass: `xcodebuild test -scheme "SNOMED Lookup" -destination "platform=macOS"`
+3. **Run tests before committing** — Ensure all 63+ tests pass: `xcodebuild test -scheme "Codeagogo" -destination "platform=macOS"`
 4. **Add docstrings** — Document all new public types, methods, and non-trivial private methods
 5. **Update documentation** — Keep README.md, ARCHITECTURE.md, and other docs in sync with code changes
 6. **Follow existing patterns** — Match the code style and architecture of surrounding code
@@ -72,7 +72,7 @@ Before submitting changes:
 
 ## Project Overview
 
-SNOMED Lookup is a macOS menu bar application that looks up SNOMED CT concepts from any application using a global hotkey. Users select a concept ID, press the hotkey, and see concept details in a popover near the cursor.
+Codeagogo is a macOS menu bar application that looks up SNOMED CT concepts from any application using a global hotkey. Users select a concept ID, press the hotkey, and see concept details in a popover near the cursor.
 
 ## Tech Stack
 
@@ -101,14 +101,14 @@ SNOMED Lookup is a macOS menu bar application that looks up SNOMED CT concepts f
 
 ```bash
 # Build
-xcodebuild build -scheme "SNOMED Lookup" -destination "platform=macOS"
+xcodebuild build -scheme "Codeagogo" -destination "platform=macOS"
 
 # Run tests
-xcodebuild test -scheme "SNOMED Lookup" -destination "platform=macOS"
+xcodebuild test -scheme "Codeagogo" -destination "platform=macOS"
 
 # Run specific test class
-xcodebuild test -scheme "SNOMED Lookup" -destination "platform=macOS" \
-  -only-testing:"SNOMED LookupTests/ConceptCacheTests"
+xcodebuild test -scheme "Codeagogo" -destination "platform=macOS" \
+  -only-testing:"CodeagogoTests/ConceptCacheTests"
 
 # Package for distribution
 ./package-zip.sh
@@ -221,7 +221,7 @@ private let maxSize = 100
 
 2. **Single Instance** — `enforceSingleInstance()` terminates if another instance is running. This can interfere with debugging if a release build is running.
 
-3. **Test Environment** — Tests may fail with "Early unexpected exit" if another instance is running. Kill existing instances first: `pkill -9 "SNOMED Lookup"`
+3. **Test Environment** — Tests may fail with "Early unexpected exit" if another instance is running. Kill existing instances first: `pkill -9 "Codeagogo"`
 
 4. **Carbon Modifiers** — NSEvent and Carbon use different modifier flag formats. Always use `HotKeySettings.carbonModifiers(from:)`.
 

@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 env:
-  SCHEME: "SNOMED Lookup"
+  SCHEME: "Codeagogo"
   DESTINATION: "platform=macOS"
 
 jobs:
@@ -42,7 +42,7 @@ jobs:
           xcodebuild test \
             -scheme "$SCHEME" \
             -destination "$DESTINATION" \
-            -only-testing:"SNOMED LookupTests" \
+            -only-testing:"CodeagogoTests" \
             -configuration Debug \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
@@ -55,7 +55,7 @@ jobs:
           xcodebuild test \
             -scheme "$SCHEME" \
             -destination "$DESTINATION" \
-            -only-testing:"SNOMED LookupUITests" \
+            -only-testing:"CodeagogoUITests" \
             -configuration Debug \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=YES \
@@ -122,15 +122,15 @@ jobs:
       - name: Create Artifact
         run: |
           mkdir -p artifact
-          cp -R "build/Build/Products/Release/SNOMED Lookup.app" artifact/
+          cp -R "build/Build/Products/Release/Codeagogo.app" artifact/
           cd artifact
-          zip -r "SNOMED-Lookup-macOS.zip" "SNOMED Lookup.app"
+          zip -r "Codeagogo-macOS.zip" "Codeagogo.app"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SNOMED-Lookup-macOS
-          path: artifact/SNOMED-Lookup-macOS.zip
+          name: Codeagogo-macOS
+          path: artifact/Codeagogo-macOS.zip
           retention-days: 30
 
       - name: Cleanup Keychain

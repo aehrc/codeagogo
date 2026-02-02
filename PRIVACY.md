@@ -1,8 +1,8 @@
-# Privacy Policy – SNOMED Lookup (macOS)
+# Privacy Policy – Codeagogo (macOS)
 
 _Last updated: 2026-01-13_
 
-SNOMED Lookup is a lightweight macOS utility intended for internal use by clinicians, terminologists, and developers. The application is designed to minimise data access and avoid persistent storage.
+Codeagogo is a lightweight macOS utility intended for internal use by clinicians, terminologists, and developers. The application is designed to minimise data access and avoid persistent storage.
 
 ---
 
@@ -29,7 +29,7 @@ Only the concept ID is transmitted as part of these requests.
 
 ## What information is NOT collected
 
-SNOMED Lookup does **not**:
+Codeagogo does **not**:
 
 - Collect or transmit personal information
 - Store clipboard contents

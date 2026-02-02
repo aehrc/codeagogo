@@ -1,6 +1,6 @@
-# Contributing to SNOMED Lookup
+# Contributing to Codeagogo
 
-Thank you for your interest in contributing to SNOMED Lookup! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to Codeagogo! This document provides guidelines and information for contributors.
 
 ## Table of Contents
 
@@ -40,20 +40,20 @@ Before contributing, familiarize yourself with:
 
 ```bash
 # Fork the repository on GitHub, then clone your fork
-git clone https://github.com/YOUR_USERNAME/snomed-lookup.git
-cd "snomed-lookup/SNOMED Lookup"
+git clone https://github.com/YOUR_USERNAME/codeagogo.git
+cd "codeagogo/Codeagogo"
 ```
 
 ### 2. Open in Xcode
 
 ```bash
-open "SNOMED Lookup.xcodeproj"
+open "Codeagogo.xcodeproj"
 ```
 
 ### 3. Configure Signing
 
 - Open the project settings
-- Select the "SNOMED Lookup" target
+- Select the "Codeagogo" target
 - Under "Signing & Capabilities", select your development team
 
 ### 4. Grant Permissions
@@ -66,10 +66,10 @@ When running the app:
 
 ```bash
 # Build the project
-xcodebuild build -scheme "SNOMED Lookup" -destination "platform=macOS"
+xcodebuild build -scheme "Codeagogo" -destination "platform=macOS"
 
 # Run all tests
-xcodebuild test -scheme "SNOMED Lookup" -destination "platform=macOS"
+xcodebuild test -scheme "Codeagogo" -destination "platform=macOS"
 ```
 
 ## Making Changes
@@ -201,14 +201,14 @@ enum MyError: LocalizedError {
 
 ```bash
 # Run all tests
-xcodebuild test -scheme "SNOMED Lookup" -destination "platform=macOS"
+xcodebuild test -scheme "Codeagogo" -destination "platform=macOS"
 
 # Run specific test class
-xcodebuild test -scheme "SNOMED Lookup" -destination "platform=macOS" \
-  -only-testing:"SNOMED LookupTests/ConceptCacheTests"
+xcodebuild test -scheme "Codeagogo" -destination "platform=macOS" \
+  -only-testing:"CodeagogoTests/ConceptCacheTests"
 
 # Run with verbose output
-xcodebuild test -scheme "SNOMED Lookup" -destination "platform=macOS" \
+xcodebuild test -scheme "Codeagogo" -destination "platform=macOS" \
   2>&1 | grep -E "(Test Case|passed|failed)"
 ```
 
@@ -254,12 +254,12 @@ Aim for meaningful coverage of:
 
 1. **Ensure all tests pass**
    ```bash
-   xcodebuild test -scheme "SNOMED Lookup" -destination "platform=macOS"
+   xcodebuild test -scheme "Codeagogo" -destination "platform=macOS"
    ```
 
 2. **Verify no compiler warnings**
    ```bash
-   xcodebuild build -scheme "SNOMED Lookup" -destination "platform=macOS" 2>&1 | grep warning
+   xcodebuild build -scheme "Codeagogo" -destination "platform=macOS" 2>&1 | grep warning
    ```
 
 3. **Update documentation** if needed
@@ -322,4 +322,4 @@ If you have questions about contributing, feel free to:
 - Review existing issues and pull requests
 - Check the documentation
 
-Thank you for contributing to SNOMED Lookup!
+Thank you for contributing to Codeagogo!

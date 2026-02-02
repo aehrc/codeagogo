@@ -9,7 +9,7 @@ on:
         type: string
 
 env:
-  SCHEME: "SNOMED Lookup"
+  SCHEME: "Codeagogo"
   DESTINATION: "platform=macOS"
 
 jobs:
@@ -76,10 +76,10 @@ jobs:
           # Update MARKETING_VERSION in project.pbxproj for the main app target
           # This updates all occurrences which covers Debug and Release configurations
           sed -i '' "s/MARKETING_VERSION = [0-9]*\.[0-9]*\.[0-9]*;/MARKETING_VERSION = $VERSION;/g" \
-            "SNOMED Lookup.xcodeproj/project.pbxproj"
+            "Codeagogo.xcodeproj/project.pbxproj"
 
           echo "Updated Xcode project version to $VERSION"
-          grep "MARKETING_VERSION" "SNOMED Lookup.xcodeproj/project.pbxproj"
+          grep "MARKETING_VERSION" "Codeagogo.xcodeproj/project.pbxproj"
 
       - name: Extract release notes
         id: release_notes
@@ -97,7 +97,7 @@ jobs:
 
       - name: Commit release changes
         run: |
-          git add CHANGELOG.md "SNOMED Lookup.xcodeproj/project.pbxproj"
+          git add CHANGELOG.md "Codeagogo.xcodeproj/project.pbxproj"
           git commit -m "release: v${{ inputs.version }}"
 
       - name: Create and push tag
@@ -155,17 +155,17 @@ jobs:
       - name: Create artifact
         run: |
           mkdir -p artifact
-          cp -R "build/Build/Products/Release/SNOMED Lookup.app" artifact/
+          cp -R "build/Build/Products/Release/Codeagogo.app" artifact/
           cd artifact
-          zip -r "SNOMED-Lookup-v${{ inputs.version }}-macOS.zip" "SNOMED Lookup.app"
+          zip -r "Codeagogo-v${{ inputs.version }}-macOS.zip" "Codeagogo.app"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ inputs.version }}
-          name: SNOMED Lookup v${{ inputs.version }}
+          name: Codeagogo v${{ inputs.version }}
           body_path: release_notes.md
-          files: artifact/SNOMED-Lookup-v${{ inputs.version }}-macOS.zip
+          files: artifact/Codeagogo-v${{ inputs.version }}-macOS.zip
           draft: false
           prerelease: false
 

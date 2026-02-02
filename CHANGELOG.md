@@ -1,18 +1,27 @@
 # Changelog
 
-All notable changes to SNOMED Lookup are documented in this file.
+All notable changes to Codeagogo are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
 ### Added
+- **Inserted text remains selected**: After using the replace hotkey or ECL format hotkey, the inserted text is automatically selected, making it easy to undo or further edit. Selection skipped for text > 1000 characters to avoid delays
+- **Inactive concept highlighting**: The popover now prominently displays inactive concepts with an orange warning icon and "INACTIVE" label
+- **"INACTIVE - " prefix option**: New setting (default: on) prefixes inactive concept terms with "INACTIVE - " when using the replace hotkey (e.g., `146066001 | INACTIVE - Some term |`)
+- **Hotkey recorder UI**: Settings now uses a keystroke recorder control for configuring hotkeys. Click "Record" and press your desired key combination instead of selecting from dropdown menus and checkboxes.
+- **Multi-code-system support**: Lookup, replace, and search now work with LOINC, ICD-10, RxNorm, and other code systems in addition to SNOMED CT
+- **Code system picker in search panel**: Switch between SNOMED CT and configured code systems when searching
+- **Code system configuration in Settings**: Add, remove, and enable/disable code systems from the terminology server
+- **SCTID validation**: Uses Verhoeff check digit algorithm to distinguish valid SNOMED CT IDs from other numeric codes
 - **ECL Format hotkey** (Control+Option+E): Toggles selected ECL expressions between pretty-printed and minified formats
 - Full ECL 2.x parser supporting constraint operators, compound expressions, refinements, and filters
 - Settings UI for configuring ECL format hotkey key and modifiers
 - **Progress HUD** for replace hotkey: Shows lookup progress when processing many concepts
 
 ### Fixed
+- **Inactive concept status**: Fixed issue where inactive concepts were incorrectly displayed as active. The FHIR response parser now correctly handles the `inactive` property when returned as a boolean value.
 - **Replace hotkey reliability**: Fixed issue where some concept IDs weren't being replaced when processing large selections (50+ concepts)
 
 ### Performance
@@ -35,10 +44,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     3. `385804009` → `385804009 | Diabetic care |` (add again)
   - Mixed selections work: `385804009 | Wrong | and 73211009` updates both
 
+### Changed
+- **Lookup hotkey** now automatically detects whether a code is SNOMED CT (via Verhoeff check) or from another code system
+- **Popover view** adapts display based on code system: shows FSN/PT/Edition for SNOMED CT, simpler Code/Display/System for others
+- **Replace hotkey** handles mixed selections with both SNOMED CT and non-SNOMED codes
+
 ### Technical
+- App now prompts for Accessibility permission on launch via `AXIsProcessTrustedWithOptions` for reliable text selection
+- Extended SystemSelectionReader with Accessibility API methods (`getSelectionRange`, `setSelectionRange`, `pasteAndSelect`) to select inserted text after paste operations
+- Selection fallback uses character-by-character keyboard simulation (Shift+Left Arrow) for precise selection up to 1000 chars
+- Added HotKeyRecorderView.swift for recording keyboard shortcuts via keystroke capture
+- Added KeyCodeFormatter.swift for formatting key codes with macOS modifier symbols (⌃⌥⇧⌘)
+- Refactored hotkey settings to use KeyCodeFormatter for human-readable hotkey display
+- Simplified SettingsView by removing Picker/Toggle-based hotkey configuration
+- Added KeyCodeFormatterTests.swift with comprehensive tests for key formatting
+- Added SCTIDValidator.swift with Verhoeff check digit algorithm for SNOMED CT ID validation
+- Added CodeSystemSettings.swift for managing configured code systems (persisted to UserDefaults)
+- Added AvailableCodeSystem struct for code systems discovered from the server
+- Extended ConceptResult with `system` field and `systemName`/`isSNOMEDCT` computed properties
+- Added `getAvailableCodeSystems()` method to OntoserverClient for fetching non-SNOMED code systems
+- Added `lookupInCodeSystem()` method for looking up codes in specific code systems
+- Added `lookupInConfiguredSystems()` method for parallel search across configured systems
+- Added `searchInCodeSystem()` method for searching within non-SNOMED code systems
+- Extended LookupViewModel with `ExtractedCode` struct and `extractCode()` method for SCTID validation
+- Updated `extractAllConceptIds()` to include `isSCTID` flag in ConceptMatch
+- Extended ConceptLookupClient protocol with `lookupInConfiguredSystems()` method
+- Updated SearchSettings with `selectedCodeSystemURI` for code system selection
+- Updated SearchViewModel to handle non-SNOMED code system searches
+- Updated SearchPanelView with code system picker (edition picker hidden for non-SNOMED)
+- Updated SettingsView with "Additional Code Systems" configuration section
+- Updated PopoverView to show adapted UI for SNOMED CT vs non-SNOMED results
+- Added SCTIDValidatorTests.swift with 20+ tests for Verhoeff validation
+- Added CodeSystemSettingsTests.swift for settings and ConceptResult code system tests
+- Extended OntoserverClientTests.swift with multi-code-system response parsing tests
+- Extended ConceptIdExtractionTests.swift with SCTID validation and ExtractedCode tests
 - Added ProgressHUD.swift for displaying lookup progress near cursor
 - Added `batchLookup(conceptIds:)` method to OntoserverClient using `ValueSet/$expand` for efficient multi-concept lookup
-- Added `BatchLookupResult` struct to hold PT and FSN mappings from batch lookups
+- `BatchLookupResult` includes active status via `property=inactive` parameter (parsed from FHIR R5 property extension)
+- Added `BatchLookupResult` struct to hold PT, FSN, and active status mappings from batch lookups
 - Added ECLToken.swift with token type definitions for ECL syntax elements
 - Added ECLLexer.swift for tokenizing ECL expressions (handles operators, identifiers, literals)
 - Added ECLAST.swift with AST node types (expressions, refinements, attributes, filters)
@@ -91,7 +134,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Unknown edition IDs now fall back to CodeSystem title from server instead of showing raw ID
 
 ### Testing
-- Added UI test automation target (`SNOMED LookupUITests`) with XCUITest coverage
+- Added UI test automation target (`CodeagogoUITests`) with XCUITest coverage
 - Settings window UI tests (~20 tests): hotkey pickers, modifier toggles, format picker, FHIR URL, save button, logging, diagnostics
 - Search panel UI tests (~8 tests): panel open/close, search field, cancel, insert disabled state, edition picker
 - Menu bar UI tests (~3 tests): app launch, status item, menu items
@@ -175,7 +218,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Support for multiple Xcode workspaces
 
 ### Changed
-- Switched from SNOMED Lookup Service to CSIRO Ontoserver for improved reliability
+- Switched from Codeagogo Service to CSIRO Ontoserver for improved reliability
 - Improved logging with categorical loggers (network, selection, ui, general)
 
 ### Fixed

@@ -1,6 +1,6 @@
-# SNOMED Lookup
+# Codeagogo
 
-![CI](https://github.com/aehrc/snomed-lookup/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/aehrc/codeagogo/actions/workflows/ci.yml/badge.svg)
 ![platform](https://img.shields.io/badge/platform-macOS%2013%2B-blue)
 ![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)
 ![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-red)
@@ -75,7 +75,7 @@ For detailed installation instructions, see **[INSTALL.md](INSTALL.md)**.
 1. Download the latest build:
    - **Releases**: Download from [Releases](../../releases) (stable)
    - **CI Builds**: Download from [Actions](../../actions) artifacts (latest main branch)
-2. Extract and move `SNOMED Lookup.app` to `/Applications`
+2. Extract and move `Codeagogo.app` to `/Applications`
 3. Right-click the app and select **Open** (required for first launch)
 4. Grant **Accessibility** permission when prompted
 5. The app appears in your menu bar — you're ready to go!
@@ -140,7 +140,7 @@ For a detailed technical overview, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ```mermaid
 flowchart TB
-    subgraph App["SNOMED Lookup"]
+    subgraph App["Codeagogo"]
         subgraph UI["User Interface"]
             MenuBar["Menu Bar<br/>(AppKit)"]
             Popover["Popover<br/>(SwiftUI)"]
@@ -189,14 +189,14 @@ flowchart TB
 
 ```bash
 # Clone the repository
-git clone https://github.com/AuDigitalHealth/snomed-lookup.git
-cd "snomed-lookup/SNOMED Lookup"
+git clone https://github.com/AuDigitalHealth/codeagogo.git
+cd "codeagogo/Codeagogo"
 
 # Open in Xcode
-open "SNOMED Lookup.xcodeproj"
+open "Codeagogo.xcodeproj"
 
 # Or build from command line
-xcodebuild build -scheme "SNOMED Lookup" -destination "platform=macOS"
+xcodebuild build -scheme "Codeagogo" -destination "platform=macOS"
 ```
 
 ### Running from Xcode
@@ -210,10 +210,10 @@ When running from Xcode, the **built app** (not Xcode itself) needs Accessibilit
 ### Project Structure
 
 ```
-SNOMED Lookup/
-├── SNOMED Lookup.xcodeproj/    # Xcode project
-├── SNOMED Lookup/              # Main app source
-│   ├── SNOMED_LookupApp.swift  # App entry point
+Codeagogo/
+├── Codeagogo.xcodeproj/    # Xcode project
+├── Codeagogo/              # Main app source
+│   ├── CodeagogoApp.swift      # App entry point
 │   ├── AppDelegate.swift       # Application delegate
 │   ├── LookupViewModel.swift   # View model
 │   ├── PopoverView.swift       # Main UI
@@ -223,7 +223,7 @@ SNOMED Lookup/
 │   ├── HotKeySettings.swift    # Hotkey configuration
 │   ├── SystemSelectionReader.swift  # Selection capture
 │   └── ...
-├── SNOMED LookupTests/         # Unit & integration tests
+├── CodeagogoTests/         # Unit & integration tests
 ├── scripts/                    # Build scripts
 ├── README.md                   # This file
 ├── INSTALL.md                  # Installation guide
@@ -252,7 +252,7 @@ The workflow will:
 **Manual build** (for local testing):
 ```bash
 ./scripts/package-zip.sh
-# Output: dist/SNOMED-Lookup-macOS-Release.zip
+# Output: dist/Codeagogo-macOS-Release.zip
 ```
 
 ## Testing
@@ -261,11 +261,11 @@ The workflow will:
 
 ```bash
 # Run all tests
-xcodebuild test -scheme "SNOMED Lookup" -destination "platform=macOS"
+xcodebuild test -scheme "Codeagogo" -destination "platform=macOS"
 
 # Run specific test class
-xcodebuild test -scheme "SNOMED Lookup" -destination "platform=macOS" \
-  -only-testing:"SNOMED LookupTests/ConceptCacheTests"
+xcodebuild test -scheme "Codeagogo" -destination "platform=macOS" \
+  -only-testing:"CodeagogoTests/ConceptCacheTests"
 ```
 
 ### Test Coverage

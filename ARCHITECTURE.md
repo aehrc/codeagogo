@@ -1,6 +1,6 @@
-# SNOMED Lookup Architecture
+# Codeagogo Architecture
 
-This document describes the technical architecture of SNOMED Lookup, a macOS menu bar application for looking up SNOMED CT concepts.
+This document describes the technical architecture of Codeagogo, a macOS menu bar application for looking up SNOMED CT concepts.
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@ This document describes the technical architecture of SNOMED Lookup, a macOS men
 
 ## Overview
 
-SNOMED Lookup is a lightweight macOS utility that enables users to look up SNOMED CT (Systematized Nomenclature of Medicine - Clinical Terms) concepts from any application using a global hotkey.
+Codeagogo is a lightweight macOS utility that enables users to look up SNOMED CT (Systematized Nomenclature of Medicine - Clinical Terms) concepts from any application using a global hotkey.
 
 ### Key Characteristics
 
@@ -31,7 +31,7 @@ SNOMED Lookup is a lightweight macOS utility that enables users to look up SNOME
 
 ```mermaid
 flowchart TB
-    subgraph App["SNOMED Lookup Application"]
+    subgraph App["Codeagogo Application"]
         subgraph Presentation["Presentation Layer"]
             MenuBar["Menu Bar<br/>Status Item"]
             Popover["Popover View<br/>(SwiftUI)"]
@@ -71,7 +71,7 @@ flowchart TB
 
 ### Presentation Layer
 
-#### `SNOMED_LookupApp.swift`
+#### `CodeagogoApp.swift`
 - **Role**: Application entry point (`@main`)
 - **Responsibilities**:
   - Define the SwiftUI App structure
