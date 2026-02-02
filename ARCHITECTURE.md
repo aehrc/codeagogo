@@ -1,6 +1,6 @@
 # Codeagogo Architecture
 
-This document describes the technical architecture of Codeagogo, a macOS menu bar application for looking up SNOMED CT concepts.
+This document describes the technical architecture of Codeagogo, a macOS menu bar application for working with clinical terminology codes.
 
 ## Table of Contents
 
@@ -17,13 +17,25 @@ This document describes the technical architecture of Codeagogo, a macOS menu ba
 
 ## Overview
 
-Codeagogo is a lightweight macOS utility that enables users to look up SNOMED CT (Systematized Nomenclature of Medicine - Clinical Terms) concepts from any application using a global hotkey.
+Codeagogo is a macOS utility that provides global hotkeys for working with clinical terminology codes (SNOMED CT, LOINC, ICD-10, etc.) from any application.
+
+### Key Capabilities
+
+| Hotkey | Feature | Description |
+|--------|---------|-------------|
+| `Control+Option+L` | **Lookup** | Display concept details for selected code |
+| `Control+Option+S` | **Search** | Find concepts by term and insert into document |
+| `Control+Option+R` | **Replace** | Annotate codes with `ID \| term \|` format |
+| `Control+Option+E` | **ECL Format** | Pretty-print or minify ECL expressions |
 
 ### Key Characteristics
 
 - **Menu Bar Application** — Runs as a background process with menu bar presence
-- **Global Hotkey** — Responds to system-wide keyboard shortcuts
+- **Four Global Hotkeys** — Lookup, Search, Replace, and ECL Format
+- **Multi-Code-System** — SNOMED CT, LOINC, ICD-10, RxNorm, and configurable systems
 - **FHIR Integration** — Queries FHIR R4 terminology servers
+- **Batch Operations** — Fast bulk lookups via `ValueSet/$expand`
+- **ECL 2.x Parser** — Full Expression Constraint Language support
 - **SwiftUI Interface** — Modern declarative UI framework
 - **Actor-Based Concurrency** — Thread-safe operations using Swift actors
 
@@ -35,22 +47,27 @@ flowchart TB
         subgraph Presentation["Presentation Layer"]
             MenuBar["Menu Bar<br/>Status Item"]
             Popover["Popover View<br/>(SwiftUI)"]
+            SearchPanel["Search Panel<br/>(SwiftUI)"]
             Settings["Settings View<br/>(SwiftUI)"]
-            Cursor["Cursor Anchor<br/>Window"]
+            ProgressHUD["Progress HUD"]
         end
 
         subgraph Application["Application Layer"]
             AppDelegate["App Delegate"]
-            ViewModel["Lookup ViewModel<br/>(@MainActor)"]
-            HotKeySettings["HotKey Settings<br/>(Singleton)"]
-            FHIROptions["FHIR Options<br/>(Singleton)"]
+            LookupVM["Lookup ViewModel<br/>(@MainActor)"]
+            SearchVM["Search ViewModel<br/>(@MainActor)"]
+            HotKeySettings["HotKey Settings<br/>(4 Singletons)"]
+            CodeSystemSettings["Code System Settings"]
         end
 
         subgraph Service["Service Layer"]
-            GlobalHotKey["Global HotKey<br/>(Carbon)"]
-            SelectionReader["Selection Reader<br/>(AppKit)"]
+            GlobalHotKey["Global HotKeys<br/>(Carbon, 4 keys)"]
+            SelectionReader["Selection Reader<br/>(AppKit + AX API)"]
+            ECLParser["ECL Parser<br/>(Lexer + AST)"]
+            SCTIDValidator["SCTID Validator<br/>(Verhoeff)"]
             subgraph OntoClient["Ontoserver Client"]
                 FHIRParser["FHIR Parser"]
+                BatchLookup["Batch Lookup<br/>(ValueSet/$expand)"]
                 Cache["Cache<br/>(Actor)"]
             end
         end
@@ -59,11 +76,16 @@ flowchart TB
     Server[("FHIR Terminology Server<br/>(Ontoserver)<br/>via HTTPS")]
 
     MenuBar --> AppDelegate
-    Popover --> ViewModel
-    AppDelegate --> ViewModel
+    Popover --> LookupVM
+    SearchPanel --> SearchVM
+    AppDelegate --> LookupVM
+    AppDelegate --> SearchVM
     AppDelegate --> GlobalHotKey
-    ViewModel --> SelectionReader
-    ViewModel --> OntoClient
+    LookupVM --> SelectionReader
+    LookupVM --> OntoClient
+    SearchVM --> OntoClient
+    AppDelegate --> ECLParser
+    LookupVM --> SCTIDValidator
     OntoClient --> Server
 ```
 
@@ -82,52 +104,100 @@ flowchart TB
 - **Role**: NSApplication delegate
 - **Responsibilities**:
   - Set up the menu bar status item
-  - Manage the popover lifecycle
-  - Register and handle the global hotkey
-  - Coordinate lookup triggers
+  - Manage the popover and search panel lifecycle
+  - Register and handle four global hotkeys (Lookup, Search, Replace, ECL Format)
+  - Coordinate lookup, replace, and ECL format operations
   - React to hotkey setting changes via Combine
 
 #### `PopoverView.swift`
-- **Role**: Main result display UI
+- **Role**: Lookup result display UI
 - **Responsibilities**:
-  - Display concept lookup results
-  - Show loading and error states
+  - Display concept lookup results (adapts for SNOMED CT vs other systems)
+  - Show inactive concept highlighting (orange warning)
   - Provide copy-to-clipboard buttons
-  - Display usage instructions
+  - Show loading and error states
+
+#### `SearchPanelView.swift`
+- **Role**: Search and insert UI
+- **Responsibilities**:
+  - Typeahead search interface
+  - Code system and edition selection
+  - Insert format selection (ID, PT, FSN, ID|PT, ID|FSN)
+  - Display search results with PT, FSN, ID, and edition
+
+#### `SearchPanelController.swift`
+- **Role**: NSWindow management for search panel
+- **Responsibilities**:
+  - Create floating panel window
+  - Position panel near cursor
+  - Handle panel show/hide
 
 #### `SettingsView.swift`
 - **Role**: Application preferences UI
 - **Responsibilities**:
-  - Configure global hotkey (key + modifiers)
+  - Configure four hotkeys via keystroke recorder
   - Configure FHIR endpoint URL
+  - Configure additional code systems
+  - Configure replace settings (term format, inactive prefix)
   - Toggle debug logging
   - Provide diagnostic export functionality
 
-#### `CursorAnchorWindow.swift`
-- **Role**: Invisible anchor for popover positioning
+#### `HotKeyRecorderView.swift`
+- **Role**: Keystroke recorder control
 - **Responsibilities**:
-  - Create a zero-size window at the cursor location
-  - Provide a stable anchor point for the popover
+  - Display current hotkey with modifier symbols (⌃⌥⇧⌘)
+  - Enter recording mode on button click
+  - Capture keystroke and update settings
+
+#### `ProgressHUD.swift`
+- **Role**: Progress feedback UI
+- **Responsibilities**:
+  - Display progress message near cursor
+  - Show/hide during batch operations
 
 ### Application Layer
 
 #### `LookupViewModel.swift`
-- **Role**: MVVM view model
+- **Role**: MVVM view model for lookups
 - **Responsibilities**:
   - Coordinate between UI and services
   - Manage loading/error states
-  - Extract concept IDs from selected text
+  - Extract concept IDs from selected text (with SCTID validation)
+  - Extract existing `| term |` patterns for toggle behavior
   - Trigger lookups and publish results
 - **Annotations**: `@MainActor` for UI safety
 - **Protocols**: Accepts `SelectionReading` and `ConceptLookupClient` for testability
 
-#### `HotKeySettings.swift`
-- **Role**: Hotkey configuration singleton
+#### `SearchViewModel.swift`
+- **Role**: MVVM view model for search
 - **Responsibilities**:
-  - Store key code and modifiers
+  - Manage search state and results
+  - Debounce search queries
+  - Format selected concept for insertion
+  - Handle code system and edition selection
+
+#### `HotKeySettings.swift` (and variants)
+- **Role**: Hotkey configuration singletons
+- **Files**: `HotKeySettings`, `SearchHotKeySettings`, `ReplaceHotKeySettings`, `ECLFormatHotKeySettings`
+- **Responsibilities**:
+  - Store key code and modifiers for each hotkey
   - Persist settings to UserDefaults
   - Convert between NSEvent.ModifierFlags and Carbon modifiers
-  - Provide human-readable hotkey description
+  - Provide human-readable hotkey description via `KeyCodeFormatter`
+
+#### `CodeSystemSettings.swift`
+- **Role**: Multi-code-system configuration
+- **Responsibilities**:
+  - Store enabled code systems (LOINC, ICD-10, etc.)
+  - Persist to UserDefaults
+  - Provide list of systems for lookup fallback
+
+#### `ReplaceSettings.swift`
+- **Role**: Replace hotkey configuration
+- **Responsibilities**:
+  - Store term format preference (FSN vs PT)
+  - Store inactive prefix option
+  - Persist to UserDefaults
 
 #### `FHIROptions.swift`
 - **Role**: FHIR endpoint configuration singleton
@@ -142,26 +212,49 @@ flowchart TB
 #### `GlobalHotKey.swift`
 - **Role**: System-wide hotkey registration
 - **Responsibilities**:
-  - Register Carbon event handlers
+  - Register Carbon event handlers (supports multiple hotkeys via `id` parameter)
   - Listen for hotkey events
   - Invoke callback on hotkey press
+  - Support live hotkey updates without app restart
   - Clean up handlers on deallocation
 - **Framework**: Carbon (legacy but required for global hotkeys)
 
 #### `SystemSelectionReader.swift`
-- **Role**: System text selection capture
+- **Role**: System text selection capture and manipulation
 - **Responsibilities**:
   - Snapshot current pasteboard contents
   - Simulate Cmd+C to copy selection
   - Read copied text from pasteboard
   - Restore original pasteboard contents
+  - Paste text via simulated Cmd+V
+  - Select inserted text via Accessibility API or keyboard fallback
 - **Requirement**: Accessibility permission
+
+#### `SCTIDValidator.swift`
+- **Role**: SNOMED CT ID validation
+- **Responsibilities**:
+  - Validate SNOMED CT IDs using Verhoeff check digit algorithm
+  - Distinguish SNOMED CT codes from other numeric codes
+
+#### `ECLParser.swift` (and related)
+- **Role**: Expression Constraint Language parser
+- **Files**: `ECLLexer.swift`, `ECLToken.swift`, `ECLAST.swift`, `ECLParser.swift`, `ECLFormatter.swift`
+- **Responsibilities**:
+  - Tokenize ECL expressions (lexer)
+  - Parse ECL 2.x grammar into AST (recursive descent parser)
+  - Pretty-print AST with indentation (formatter)
+  - Minify ECL to single line (minifier)
+  - Toggle between pretty and minified formats
 
 #### `OntoserverClient.swift`
 - **Role**: FHIR terminology server client
 - **Responsibilities**:
-  - Query FHIR CodeSystem/$lookup endpoint
+  - Query FHIR `CodeSystem/$lookup` endpoint
+  - Batch lookup via `ValueSet/$expand` (15x faster for bulk operations)
+  - Search concepts via `ValueSet/$expand` with filter
   - Fetch available SNOMED CT editions
+  - Fetch available non-SNOMED code systems
+  - Lookup in configured code systems (parallel search)
   - Parse FHIR Parameters responses
   - Manage in-memory cache
   - Handle multi-edition fallback
@@ -171,8 +264,8 @@ flowchart TB
 - **Role**: Thread-safe result cache
 - **Responsibilities**:
   - Store lookup results with timestamps
-  - Implement TTL-based expiration
-  - Implement LRU eviction at capacity
+  - Implement TTL-based expiration (6 hours)
+  - Implement LRU eviction at capacity (100 entries)
   - Track access patterns for LRU
 
 ### Data Models
@@ -180,13 +273,37 @@ flowchart TB
 #### `ConceptResult`
 ```swift
 struct ConceptResult {
-    let conceptId: String      // SNOMED CT identifier
-    let branch: String         // Edition name (e.g., "International (20240101)")
-    let fsn: String?           // Fully Specified Name
-    let pt: String?            // Preferred Term
+    let conceptId: String      // Code identifier
+    let branch: String         // Edition name (for SNOMED CT) or system name
+    let fsn: String?           // Fully Specified Name (SNOMED CT only)
+    let pt: String?            // Preferred Term / Display
     let active: Bool?          // Active/inactive status
     let effectiveTime: String? // Version date
     let moduleId: String?      // Module identifier
+    let system: String?        // Code system URI (for non-SNOMED)
+
+    var isSNOMEDCT: Bool       // Computed: true if system is SNOMED CT
+    var systemName: String     // Computed: human-readable system name
+}
+```
+
+#### `SearchResult`
+```swift
+struct SearchResult {
+    let code: String           // Concept code
+    let display: String        // Display term (PT)
+    let fsn: String?           // FSN if different from display
+    let editionId: String?     // Edition identifier
+    let editionTitle: String?  // Human-readable edition name
+}
+```
+
+#### `BatchLookupResult`
+```swift
+struct BatchLookupResult {
+    let ptByCode: [String: String]     // Code → Preferred Term
+    let fsnByCode: [String: String]    // Code → Fully Specified Name
+    let activeByCode: [String: Bool]   // Code → Active status
 }
 ```
 
@@ -199,11 +316,21 @@ struct SNOMEDEdition {
 }
 ```
 
+#### `ConceptMatch`
+```swift
+struct ConceptMatch {
+    let conceptId: String      // Extracted code
+    let range: Range<String.Index>  // Position in source text
+    let existingTerm: String?  // Existing `| term |` if present
+    let isSCTID: Bool          // True if valid SNOMED CT ID (Verhoeff check)
+}
+```
+
 #### `OntoserverError`
 ```swift
 enum OntoserverError: LocalizedError {
     case invalidURL(String)           // URL construction failed
-    case conceptNotFound(String)      // Concept not in any edition
+    case conceptNotFound(String)      // Concept not in any edition/system
     case noEditionsFound              // No SNOMED editions available
 }
 ```
@@ -371,7 +498,7 @@ Non-retryable conditions:
 - **Clipboard restoration** after reading
 - **HTTPS-only** network communication
 - **No telemetry** or analytics
-- **App Sandbox** enabled
+- **App Sandbox disabled** — Required for Accessibility API access to other processes
 
 ### Privacy
 

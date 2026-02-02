@@ -72,30 +72,45 @@ Before submitting changes:
 
 ## Project Overview
 
-Codeagogo is a macOS menu bar application that looks up SNOMED CT concepts from any application using a global hotkey. Users select a concept ID, press the hotkey, and see concept details in a popover near the cursor.
+Codeagogo is a macOS menu bar utility for working with clinical terminology codes. It provides four global hotkeys:
+
+| Hotkey | Action |
+|--------|--------|
+| `Control+Option+L` | **Lookup** — Display concept details for selected code |
+| `Control+Option+S` | **Search** — Open search panel to find and insert concepts |
+| `Control+Option+R` | **Replace** — Annotate codes with `ID \| term \|` format |
+| `Control+Option+E` | **ECL Format** — Toggle ECL between pretty-printed and minified |
+
+Supports SNOMED CT, LOINC, ICD-10, RxNorm, and other configurable code systems.
 
 ## Tech Stack
 
 - **Language:** Swift 5.9+
-- **UI Framework:** SwiftUI (popover, settings) + AppKit (menu bar, pasteboard)
+- **UI Framework:** SwiftUI (popover, settings, search panel) + AppKit (menu bar, pasteboard)
 - **Minimum OS:** macOS 13 (Ventura)
 - **Architecture:** MVVM with dependency injection
 - **Concurrency:** Swift async/await, actors for thread safety
 - **External API:** FHIR R4 terminology server (Ontoserver)
+- **ECL Parser:** Recursive descent parser for Expression Constraint Language 2.x
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `AppDelegate.swift` | Menu bar setup, hotkey registration, popover management |
-| `LookupViewModel.swift` | Coordinates lookups, extracts concept IDs, manages state |
-| `OntoserverClient.swift` | FHIR API client with caching and retry logic |
-| `SystemSelectionReader.swift` | Captures selected text via simulated Cmd+C |
-| `GlobalHotKey.swift` | Carbon-based global hotkey registration |
-| `PopoverView.swift` | Main results UI (SwiftUI) |
-| `SettingsView.swift` | Preferences UI (SwiftUI) |
-| `HotKeySettings.swift` | Hotkey configuration singleton |
-| `FHIROptions.swift` | FHIR endpoint configuration singleton |
+| `AppDelegate.swift` | Menu bar setup, 4 hotkeys, popover/search panel management |
+| `LookupViewModel.swift` | Coordinates lookups, extracts concept IDs, SCTID validation |
+| `SearchViewModel.swift` | Coordinates search, debouncing, format selection |
+| `OntoserverClient.swift` | FHIR API client with caching, batch lookup, retry logic |
+| `SystemSelectionReader.swift` | Captures/pastes text via Cmd+C/V, selects via AX API |
+| `GlobalHotKey.swift` | Carbon-based global hotkey registration (supports multiple) |
+| `PopoverView.swift` | Lookup results UI (SwiftUI) |
+| `SearchPanelView.swift` | Search and insert UI (SwiftUI) |
+| `SettingsView.swift` | Preferences UI with hotkey recorder (SwiftUI) |
+| `ECLParser.swift` | ECL 2.x parser (with ECLLexer, ECLAST, ECLFormatter) |
+| `SCTIDValidator.swift` | Verhoeff check digit validation for SNOMED CT IDs |
+| `HotKeySettings.swift` | Hotkey config (+ Search, Replace, ECLFormat variants) |
+| `CodeSystemSettings.swift` | Multi-code-system configuration |
+| `ReplaceSettings.swift` | Replace hotkey settings (term format, inactive prefix) |
 
 ## Build & Test Commands
 
@@ -166,12 +181,18 @@ Reading selected text requires Accessibility permission. The process:
 
 ## Testing
 
-63 tests covering:
-- `ConceptIdExtractionTests` — Regex extraction (20 tests)
-- `ConceptCacheTests` — Cache operations, TTL, LRU (13 tests)
-- `EditionNameParsingTests` — Edition URI parsing (9 tests)
-- `OntoserverClientTests` — FHIR parsing, errors (10 tests)
-- `IntegrationTests` — End-to-end lookups (11 tests)
+100+ tests covering:
+- `ConceptIdExtractionTests` — Regex extraction, SCTID validation
+- `ConceptCacheTests` — Cache operations, TTL, LRU
+- `EditionNameParsingTests` — Edition URI parsing
+- `OntoserverClientTests` — FHIR parsing, errors, multi-code-system
+- `IntegrationTests` — End-to-end lookups
+- `SCTIDValidatorTests` — Verhoeff check digit validation
+- `CodeSystemSettingsTests` — Code system configuration
+- `ECLFormatterTests` — ECL lexer, parser, formatter, minifier
+- `KeyCodeFormatterTests` — Hotkey display formatting
+- `SearchViewModelTests` — Search coordination
+- `ReplaceHotKeyTests` — Replace settings
 
 Tests use a `TestableConceptCache` subclass that exposes internal state.
 
@@ -192,11 +213,15 @@ private func getEditionName(for editionId: String) -> String {
 }
 ```
 
-### Modifying the Hotkey
+### Modifying Hotkeys
 
-Default hotkey is Control+Option+L. Configuration is in `HotKeySettings.swift`:
-- `keyCode`: Virtual key code (e.g., `kVK_ANSI_L`)
-- `modifiers`: `NSEvent.ModifierFlags` set
+Four hotkeys are configurable via Settings using a keystroke recorder:
+- **Lookup**: `HotKeySettings.swift` (default: Control+Option+L)
+- **Search**: `SearchHotKeySettings.swift` (default: Control+Option+S)
+- **Replace**: `ReplaceHotKeySettings.swift` (default: Control+Option+R)
+- **ECL Format**: `ECLFormatHotKeySettings.swift` (default: Control+Option+E)
+
+Each stores `keyCode` (virtual key code) and `modifiersRaw` (Carbon modifier mask).
 
 ### Changing Cache Behavior
 

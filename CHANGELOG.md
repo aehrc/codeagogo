@@ -20,6 +20,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Settings UI for configuring ECL format hotkey key and modifiers
 - **Progress HUD** for replace hotkey: Shows lookup progress when processing many concepts
 
+### Changed
+- **App renamed to Codeagogo**: The app has been renamed from "SNOMED Lookup" to "Codeagogo" to better reflect its expanded functionality beyond SNOMED CT lookups. Bundle identifier changed to `au.csiro.Codeagogo`.
+
 ### Fixed
 - **Inactive concept status**: Fixed issue where inactive concepts were incorrectly displayed as active. The FHIR response parser now correctly handles the `inactive` property when returned as a boolean value.
 - **Replace hotkey reliability**: Fixed issue where some concept IDs weren't being replaced when processing large selections (50+ concepts)

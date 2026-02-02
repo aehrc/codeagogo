@@ -1,6 +1,6 @@
 # Installing Codeagogo on macOS
 
-Codeagogo is a small macOS utility that lets you look up SNOMED CT concept IDs from anywhere in macOS using a global hotkey.
+Codeagogo is a macOS menu bar utility for working with clinical terminology codes. It provides global hotkeys to look up, search, and annotate SNOMED CT, LOINC, ICD-10, and other code systems from any application.
 
 Because this is an internal tool and is not distributed via the Mac App Store, macOS will show a security warning the first time you open it. This is expected.
 
@@ -54,13 +54,27 @@ This is the same permission required by tools such as Raycast and Alfred.
 
 ## Using Codeagogo
 
-1. Select a SNOMED CT concept ID (for example `411116001`) in any application
-2. Press the configured global hotkey
-3. A small popup will appear near your cursor showing the concept details
+### Default Hotkeys
 
-### Changing the hotkey
-- Open the app’s **Settings** window
-- Adjust the key and modifier combination as desired
+| Hotkey | Action |
+|--------|--------|
+| `Control+Option+L` | **Lookup** — Show concept details for selected code |
+| `Control+Option+S` | **Search** — Open search panel to find and insert concepts |
+| `Control+Option+R` | **Replace** — Annotate selected codes with `ID \| term \|` format |
+| `Control+Option+E` | **ECL Format** — Toggle ECL between pretty-printed and minified |
+
+### Basic Lookup
+
+1. Select a concept code (e.g., `411116001` for SNOMED CT, or `8480-6` for LOINC)
+2. Press `Control+Option+L`
+3. A popup appears near your cursor showing the concept details
+
+### Changing Hotkeys
+
+1. Open **Settings** (click the menu bar icon or press `Cmd+,`)
+2. Click **Record** next to any hotkey
+3. Press your desired key combination (must include at least one modifier)
+4. The hotkey updates immediately
 
 ---
 
@@ -83,7 +97,7 @@ Then open the app normally. You only need to do this once.
 - Check Accessibility permission is enabled
 - Try quitting and reopening the app
 
-### Always shows "Not a SNOMED CT concept ID"
+### Always shows "Not a valid concept code"
 
 This usually means the app cannot capture your selection. Common causes:
 
@@ -96,8 +110,9 @@ This usually means the app cannot capture your selection. Common causes:
 
 3. **Stale permission**: If you moved the app, you need to re-grant Accessibility permission from the new location.
 
-### "Not a SNOMED CT concept ID" message
-- Ensure you have selected the numeric concept ID itself
+### Code not found
+- For SNOMED CT: Ensure you have selected the numeric concept ID itself
+- For other code systems: Ensure the code system is enabled in Settings → Additional Code Systems
 - Some applications may require you to click once more to ensure the text selection is active
 
 ### Network errors
