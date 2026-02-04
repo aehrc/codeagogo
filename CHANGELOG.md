@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-02
+
 ### Added
 - **Inserted text remains selected**: After using the replace hotkey or ECL format hotkey, the inserted text is automatically selected, making it easy to undo or further edit. Selection skipped for text > 1000 characters to avoid delays
 - **Inactive concept highlighting**: The popover now prominently displays inactive concepts with an orange warning icon and "INACTIVE" label
