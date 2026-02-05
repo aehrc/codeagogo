@@ -59,6 +59,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Shared settings for the ECL format hotkey configuration.
     private let eclFormatHotKeySettings = ECLFormatHotKeySettings.shared
 
+    /// Shared settings for the Shrimp browser hotkey configuration.
+    private let shrimpHotKeySettings = ShrimpHotKeySettings.shared
+
     /// The currently registered global hotkey handler for lookup.
     private var hotKey: GlobalHotKey?
 
@@ -70,6 +73,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// The currently registered global hotkey handler for ECL formatting.
     private var eclFormatHotKey: GlobalHotKey?
+
+    /// The currently registered global hotkey handler for opening in Shrimp.
+    private var shrimpHotKey: GlobalHotKey?
 
     /// The search panel controller for the concept search feature.
     private let searchPanel = SearchPanelController()
@@ -101,6 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupSearchHotKey()
         setupReplaceHotKey()
         setupECLFormatHotKey()
+        setupShrimpHotKey()
     }
 
     /// Handles reopen events (e.g., clicking the Dock icon).
@@ -342,6 +349,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
     }
 
+    /// Registers the Shrimp browser hotkey and sets up observation for settings changes.
+    ///
+    /// The Shrimp hotkey opens the selected concept in the Shrimp terminology browser.
+    /// Uses id=5 to distinguish from other hotkeys.
+    private func setupShrimpHotKey() {
+        // Initial registration with current settings (using thread-safe accessors)
+        shrimpHotKey = GlobalHotKey(
+            keyCode: ShrimpHotKeySettings.currentKeyCode,
+            modifiers: ShrimpHotKeySettings.currentModifiers,
+            id: 5  // Use id=5 to distinguish from other hotkeys
+        ) { [weak self] in
+            self?.openInShrimpFromSelection()
+        }
+        shrimpHotKey?.start()
+
+        // Update hotkey live when settings change
+        Publishers.CombineLatest(shrimpHotKeySettings.$keyCode, shrimpHotKeySettings.$modifiersRaw)
+            .dropFirst()  // Skip initial value emission
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newKeyCode, newModifiersRaw in
+                guard let self else { return }
+                self.shrimpHotKeySettings.save()
+                // Convert raw modifiers to NSEvent.ModifierFlags
+                var mods: NSEvent.ModifierFlags = []
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.control])) != 0 { mods.insert(.control) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.option])) != 0 { mods.insert(.option) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
+                self.shrimpHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+            }
+            .store(in: &cancellables)
+    }
+
     /// Toggles the selected ECL expression between pretty-printed and minified formats.
     ///
     /// This method reads the current selection, attempts to parse it as an ECL
@@ -393,6 +433,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } catch {
                 NSSound.beep()
                 AppLog.error(AppLog.ui, "ECL format failed: \(error)")
+            }
+        }
+    }
+
+    /// Opens the selected concept in the Shrimp terminology browser.
+    ///
+    /// This method reads the current selection, extracts a concept code,
+    /// performs a lookup to get concept details, and opens the result in
+    /// the Shrimp browser using the user's default web browser.
+    ///
+    /// If the selection doesn't contain a valid code or the lookup fails,
+    /// a system beep is played.
+    @objc private func openInShrimpFromSelection() {
+        print("DEBUG: openInShrimpFromSelection() called")
+        Task { @MainActor in
+            do {
+                let reader = SystemSelectionReader()
+
+                // 1. Read selection
+                let text = try reader.readSelectionByCopying()
+                print("DEBUG: Read selection: \(text)")
+
+                guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    NSSound.beep()
+                    print("DEBUG: Empty selection")
+                    AppLog.warning(AppLog.ui, "Open in Shrimp failed: empty selection")
+                    return
+                }
+
+                // 2. Look up and open in Shrimp
+                print("DEBUG: Calling lookupAndOpenInShrimp")
+                try await model.lookupAndOpenInShrimp(from: text)
+
+                print("DEBUG: Successfully opened in Shrimp")
+                AppLog.info(AppLog.ui, "Opened concept in Shrimp from selection")
+
+            } catch LookupError.notAConceptId {
+                NSSound.beep()
+                print("DEBUG: Not a valid concept ID")
+                AppLog.warning(AppLog.ui, "Open in Shrimp failed: not a valid concept ID")
+            } catch {
+                NSSound.beep()
+                print("DEBUG: Error: \(error)")
+                AppLog.error(AppLog.ui, "Open in Shrimp failed: \(error)")
             }
         }
     }

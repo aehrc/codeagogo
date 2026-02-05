@@ -7,6 +7,7 @@ struct SettingsView: View {
     @ObservedObject private var replaceHk = ReplaceHotKeySettings.shared
     @ObservedObject private var replaceSettings = ReplaceSettings.shared
     @ObservedObject private var eclFormatHk = ECLFormatHotKeySettings.shared
+    @ObservedObject private var shrimpHk = ShrimpHotKeySettings.shared
     @ObservedObject private var codeSystemSettings = CodeSystemSettings.shared
 
     // Logging setting persisted in UserDefaults
@@ -90,6 +91,21 @@ struct SettingsView: View {
                         .accessibilityIdentifier("settings.eclFormatHotkey")
 
                         Text("Formats selected ECL expression for readability.")
+                            .foregroundStyle(.secondary)
+                            .font(.footnote)
+                    }
+                    .padding(.top, 4)
+                }
+
+                GroupBox("Shrimp Browser Hotkey") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HotKeyRecorderView(
+                            keyCode: $shrimpHk.keyCode,
+                            modifiersRaw: $shrimpHk.modifiersRaw
+                        )
+                        .accessibilityIdentifier("settings.shrimpHotkey")
+
+                        Text("Opens the selected concept in the Shrimp terminology browser.")
                             .foregroundStyle(.secondary)
                             .font(.footnote)
                     }

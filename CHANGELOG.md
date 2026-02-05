@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Shrimp browser integration** (Control+Option+H): New hotkey and "Open in Shrimp" button to view concepts in the Shrimp terminology browser
+- Shrimp URL builder supports SNOMED CT, LOINC, ICD-10, RxNorm, and other code systems with correct version and ValueSet parameters
+
+### Technical
+- Added ShrimpURLBuilder.swift for constructing Shrimp browser URLs from concept lookup results
+- Added ShrimpHotKeySettings.swift for configuring the Shrimp hotkey (default: Control+Option+H)
+- Extended LookupViewModel with `openInShrimp()` and `lookupAndOpenInShrimp(from:)` methods
+- Extended SettingsView with Shrimp Browser Hotkey configuration section
+- Extended PopoverView with "Open in Shrimp" button
+- Shrimp URLs include dynamic FHIR endpoint, concept ID, version/module information, and code system-specific ValueSet URIs
+
 ## [0.8.0] - 2026-02
 
 ### Added

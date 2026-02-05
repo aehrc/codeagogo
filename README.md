@@ -20,6 +20,7 @@ A macOS menu bar utility for working with clinical terminology codes. Look up SN
 | `Control+Option+S` | **Search** — Open search panel to find and insert concepts |
 | `Control+Option+R` | **Replace** — Replace selected codes with `ID \| term \|` format |
 | `Control+Option+E` | **ECL Format** — Toggle ECL between pretty-printed and minified |
+| `Control+Option+H` | **Shrimp** — Open selected concept in Shrimp browser |
 
 All hotkeys are fully customizable via Settings using a keystroke recorder.
 
@@ -61,6 +62,15 @@ Format or minify Expression Constraint Language (ECL) expressions:
 - **Minify**: Compresses to single line
 - **Toggle**: Automatically detects format and switches to the other
 - Supports full ECL 2.x syntax including refinements and filters
+
+### Shrimp Browser (Control+Option+H)
+
+Open concepts in the Shrimp terminology browser:
+- Select any concept code and press the hotkey to open in your default browser
+- Works with SNOMED CT, LOINC, and other code systems
+- Includes full version and edition context
+- Also available as "Open in Shrimp" button in the lookup popover
+- Uses the configured FHIR terminology server URL
 
 ### Multi-Code-System Support
 
@@ -141,6 +151,7 @@ Configure additional code systems beyond SNOMED CT:
 | `Control+Option+S` | Open search panel (configurable) |
 | `Control+Option+R` | Replace with terms (configurable) |
 | `Control+Option+E` | Toggle ECL format (configurable) |
+| `Control+Option+H` | Open in Shrimp browser (configurable) |
 | `Cmd+,` | Open Settings |
 | `Cmd+Shift+D` | Copy diagnostics to clipboard |
 | `Escape` | Close popover or search panel |

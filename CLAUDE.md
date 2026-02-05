@@ -80,6 +80,7 @@ Codeagogo is a macOS menu bar utility for working with clinical terminology code
 | `Control+Option+S` | **Search** — Open search panel to find and insert concepts |
 | `Control+Option+R` | **Replace** — Annotate codes with `ID \| term \|` format |
 | `Control+Option+E` | **ECL Format** — Toggle ECL between pretty-printed and minified |
+| `Control+Option+H` | **Shrimp** — Open selected concept in Shrimp browser |
 
 Supports SNOMED CT, LOINC, ICD-10, RxNorm, and other configurable code systems.
 
@@ -108,7 +109,8 @@ Supports SNOMED CT, LOINC, ICD-10, RxNorm, and other configurable code systems.
 | `SettingsView.swift` | Preferences UI with hotkey recorder (SwiftUI) |
 | `ECLParser.swift` | ECL 2.x parser (with ECLLexer, ECLAST, ECLFormatter) |
 | `SCTIDValidator.swift` | Verhoeff check digit validation for SNOMED CT IDs |
-| `HotKeySettings.swift` | Hotkey config (+ Search, Replace, ECLFormat variants) |
+| `HotKeySettings.swift` | Hotkey config (+ Search, Replace, ECLFormat, Shrimp variants) |
+| `ShrimpURLBuilder.swift` | Constructs Shrimp browser URLs for concepts |
 | `CodeSystemSettings.swift` | Multi-code-system configuration |
 | `ReplaceSettings.swift` | Replace hotkey settings (term format, inactive prefix) |
 
@@ -215,11 +217,12 @@ private func getEditionName(for editionId: String) -> String {
 
 ### Modifying Hotkeys
 
-Four hotkeys are configurable via Settings using a keystroke recorder:
+Five hotkeys are configurable via Settings using a keystroke recorder:
 - **Lookup**: `HotKeySettings.swift` (default: Control+Option+L)
 - **Search**: `SearchHotKeySettings.swift` (default: Control+Option+S)
 - **Replace**: `ReplaceHotKeySettings.swift` (default: Control+Option+R)
 - **ECL Format**: `ECLFormatHotKeySettings.swift` (default: Control+Option+E)
+- **Shrimp**: `ShrimpHotKeySettings.swift` (default: Control+Option+H)
 
 Each stores `keyCode` (virtual key code) and `modifiersRaw` (Carbon modifier mask).
 

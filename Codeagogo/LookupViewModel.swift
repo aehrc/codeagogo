@@ -346,6 +346,81 @@ final class LookupViewModel: ObservableObject {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(s, forType: .string)
     }
+
+    /// Opens the current lookup result in the Shrimp terminology browser.
+    ///
+    /// This method constructs a URL to view the concept in Shrimp and opens
+    /// it in the user's default web browser. The URL includes the concept code,
+    /// version information, and FHIR endpoint for full context.
+    ///
+    /// If no lookup result is available or the URL cannot be constructed,
+    /// this method logs a warning and does nothing.
+    func openInShrimp() {
+        guard let result = result else {
+            AppLog.warning(AppLog.general, "Cannot open in Shrimp: no lookup result")
+            return
+        }
+
+        let fhirEndpoint = FHIROptions.shared.baseURLString
+
+        guard let url = ShrimpURLBuilder.buildURL(from: result, fhirEndpoint: fhirEndpoint) else {
+            AppLog.warning(AppLog.general, "Cannot open in Shrimp: failed to build URL")
+            return
+        }
+
+        AppLog.info(AppLog.general, "Opening concept in Shrimp: \(url)")
+        NSWorkspace.shared.open(url)
+    }
+
+    /// Looks up a concept from text and opens it in the Shrimp browser.
+    ///
+    /// This method extracts a code from the text, performs a lookup to get
+    /// concept details, and opens the result in Shrimp. Unlike `lookup()`,
+    /// this does not update the `result` property or show the popover.
+    ///
+    /// - Parameter text: The text containing a concept code
+    /// - Throws: LookupError if extraction or lookup fails
+    func lookupAndOpenInShrimp(from text: String) async throws {
+        // Extract code
+        guard let extracted = extractCode(from: text) else {
+            throw LookupError.notAConceptId
+        }
+
+        // Perform lookup (handle both SNOMED CT and non-SNOMED codes)
+        let conceptResult: ConceptResult
+
+        if extracted.isSCTID {
+            // Valid SNOMED CT ID - use direct lookup
+            conceptResult = try await client.lookup(conceptId: extracted.code)
+        } else {
+            // Not a valid SCTID - search configured code systems
+            let systems = await CodeSystemSettings.shared.enabledSystems.map { $0.uri }
+
+            if systems.isEmpty {
+                // No code systems configured, try SNOMED anyway (might be an invalid check digit)
+                conceptResult = try await client.lookup(conceptId: extracted.code)
+            } else {
+                // Try configured code systems first, fall back to SNOMED
+                if let result = try await client.lookupInConfiguredSystems(code: extracted.code, systems: systems) {
+                    conceptResult = result
+                } else {
+                    // Not found in configured systems, try SNOMED as fallback
+                    conceptResult = try await client.lookup(conceptId: extracted.code)
+                }
+            }
+        }
+
+        // Open in Shrimp
+        let fhirEndpoint = FHIROptions.shared.baseURLString
+
+        guard let url = ShrimpURLBuilder.buildURL(from: conceptResult, fhirEndpoint: fhirEndpoint) else {
+            AppLog.warning(AppLog.general, "Cannot open in Shrimp: failed to build URL")
+            return
+        }
+
+        AppLog.info(AppLog.general, "Opening concept in Shrimp: \(url)")
+        NSWorkspace.shared.open(url)
+    }
 }
 
 // MARK: - Errors

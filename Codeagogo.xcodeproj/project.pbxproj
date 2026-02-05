@@ -23,19 +23,19 @@
 			containerPortal = 1C305A722F16318300F58379 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 1C305A792F16318300F58379;
-			remoteInfo = "Codeagogo";
+			remoteInfo = Codeagogo;
 		};
 		1CTEST0012F20000100000001 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 1C305A722F16318300F58379 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 1C305A792F16318300F58379;
-			remoteInfo = "Codeagogo";
+			remoteInfo = Codeagogo;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		1C305A7A2F16318300F58379 /* Codeagogo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Codeagogo.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1C305A7A2F16318300F58379 /* Codeagogo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Codeagogo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1C5364882F1DE6670056E6F3 /* FHIROptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FHIROptions.swift; sourceTree = "<group>"; };
 		1C57F1472F20C47F00123629 /* ARCHITECTURE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ARCHITECTURE.md; sourceTree = "<group>"; };
 		1C57F1482F20C47F00123629 /* CHANGELOG.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CHANGELOG.md; sourceTree = "<group>"; };
@@ -44,24 +44,24 @@
 		1C57F14B2F20C47F00123629 /* package-zip.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "package-zip.sh"; sourceTree = "<group>"; };
 		1C57F14C2F20C47F00123629 /* PRIVACY.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PRIVACY.md; sourceTree = "<group>"; };
 		1C57F14D2F20C47F00123629 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
-		1C64E8F42F29C41D00344AA8 /* CodeagogoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "CodeagogoUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		1CTEST0012F20000100000002 /* CodeagogoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "CodeagogoTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1C64E8F42F29C41D00344AA8 /* CodeagogoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CodeagogoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1CTEST0012F20000100000002 /* CodeagogoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CodeagogoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		1C305A7C2F16318300F58379 /* Codeagogo */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Codeagogo";
+			path = Codeagogo;
 			sourceTree = "<group>";
 		};
 		1C64E8F52F29C41D00344AA8 /* CodeagogoUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "CodeagogoUITests";
+			path = CodeagogoUITests;
 			sourceTree = "<group>";
 		};
 		1CTEST0012F20000100000003 /* CodeagogoTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "CodeagogoTests";
+			path = CodeagogoTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -137,10 +137,10 @@
 			fileSystemSynchronizedGroups = (
 				1C305A7C2F16318300F58379 /* Codeagogo */,
 			);
-			name = "Codeagogo";
+			name = Codeagogo;
 			packageProductDependencies = (
 			);
-			productName = "Codeagogo";
+			productName = Codeagogo;
 			productReference = 1C305A7A2F16318300F58379 /* Codeagogo.app */;
 			productType = "com.apple.product-type.application";
 		};
@@ -160,10 +160,10 @@
 			fileSystemSynchronizedGroups = (
 				1C64E8F52F29C41D00344AA8 /* CodeagogoUITests */,
 			);
-			name = "CodeagogoUITests";
+			name = CodeagogoUITests;
 			packageProductDependencies = (
 			);
-			productName = "CodeagogoUITests";
+			productName = CodeagogoUITests;
 			productReference = 1C64E8F42F29C41D00344AA8 /* CodeagogoUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
@@ -183,10 +183,10 @@
 			fileSystemSynchronizedGroups = (
 				1CTEST0012F20000100000003 /* CodeagogoTests */,
 			);
-			name = "CodeagogoTests";
+			name = CodeagogoTests;
 			packageProductDependencies = (
 			);
-			productName = "CodeagogoTests";
+			productName = CodeagogoTests;
 			productReference = 1CTEST0012F20000100000002 /* CodeagogoTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
@@ -450,7 +450,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				MARKETING_VERSION = 0.8.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "au.csiro.Codeagogo";
+				PRODUCT_BUNDLE_IDENTIFIER = au.csiro.Codeagogo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
@@ -497,7 +497,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				MARKETING_VERSION = 0.8.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "au.csiro.Codeagogo";
+				PRODUCT_BUNDLE_IDENTIFIER = au.csiro.Codeagogo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
@@ -522,7 +522,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "au.csiro.CodeagogoUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = au.csiro.CodeagogoUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -530,7 +530,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = "Codeagogo";
+				TEST_TARGET_NAME = Codeagogo;
 			};
 			name = Debug;
 		};
@@ -543,7 +543,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "au.csiro.CodeagogoUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = au.csiro.CodeagogoUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -551,7 +551,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = "Codeagogo";
+				TEST_TARGET_NAME = Codeagogo;
 			};
 			name = Release;
 		};
@@ -576,7 +576,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "au.csiro.CodeagogoTests";
+				PRODUCT_BUNDLE_IDENTIFIER = au.csiro.CodeagogoTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
@@ -611,7 +611,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "au.csiro.CodeagogoTests";
+				PRODUCT_BUNDLE_IDENTIFIER = au.csiro.CodeagogoTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";

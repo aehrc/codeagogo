@@ -27,11 +27,12 @@ Codeagogo is a macOS utility that provides global hotkeys for working with clini
 | `Control+Option+S` | **Search** | Find concepts by term and insert into document |
 | `Control+Option+R` | **Replace** | Annotate codes with `ID \| term \|` format |
 | `Control+Option+E` | **ECL Format** | Pretty-print or minify ECL expressions |
+| `Control+Option+H` | **Shrimp** | Open concept in Shrimp terminology browser |
 
 ### Key Characteristics
 
 - **Menu Bar Application** — Runs as a background process with menu bar presence
-- **Four Global Hotkeys** — Lookup, Search, Replace, and ECL Format
+- **Five Global Hotkeys** — Lookup, Search, Replace, ECL Format, and Shrimp
 - **Multi-Code-System** — SNOMED CT, LOINC, ICD-10, RxNorm, and configurable systems
 - **FHIR Integration** — Queries FHIR R4 terminology servers
 - **Batch Operations** — Fast bulk lookups via `ValueSet/$expand`
@@ -56,12 +57,12 @@ flowchart TB
             AppDelegate["App Delegate"]
             LookupVM["Lookup ViewModel<br/>(@MainActor)"]
             SearchVM["Search ViewModel<br/>(@MainActor)"]
-            HotKeySettings["HotKey Settings<br/>(4 Singletons)"]
+            HotKeySettings["HotKey Settings<br/>(5 Singletons)"]
             CodeSystemSettings["Code System Settings"]
         end
 
         subgraph Service["Service Layer"]
-            GlobalHotKey["Global HotKeys<br/>(Carbon, 4 keys)"]
+            GlobalHotKey["Global HotKeys<br/>(Carbon, 5 keys)"]
             SelectionReader["Selection Reader<br/>(AppKit + AX API)"]
             ECLParser["ECL Parser<br/>(Lexer + AST)"]
             SCTIDValidator["SCTID Validator<br/>(Verhoeff)"]
@@ -105,7 +106,7 @@ flowchart TB
 - **Responsibilities**:
   - Set up the menu bar status item
   - Manage the popover and search panel lifecycle
-  - Register and handle four global hotkeys (Lookup, Search, Replace, ECL Format)
+  - Register and handle five global hotkeys (Lookup, Search, Replace, ECL Format, Shrimp)
   - Coordinate lookup, replace, and ECL format operations
   - React to hotkey setting changes via Combine
 
@@ -115,6 +116,7 @@ flowchart TB
   - Display concept lookup results (adapts for SNOMED CT vs other systems)
   - Show inactive concept highlighting (orange warning)
   - Provide copy-to-clipboard buttons
+  - Provide "Open in Shrimp" button to view concept in Shrimp browser
   - Show loading and error states
 
 #### `SearchPanelView.swift`
@@ -135,7 +137,7 @@ flowchart TB
 #### `SettingsView.swift`
 - **Role**: Application preferences UI
 - **Responsibilities**:
-  - Configure four hotkeys via keystroke recorder
+  - Configure five hotkeys via keystroke recorder
   - Configure FHIR endpoint URL
   - Configure additional code systems
   - Configure replace settings (term format, inactive prefix)
@@ -165,6 +167,7 @@ flowchart TB
   - Extract concept IDs from selected text (with SCTID validation)
   - Extract existing `| term |` patterns for toggle behavior
   - Trigger lookups and publish results
+  - Open concepts in Shrimp browser (both from popover button and hotkey)
 - **Annotations**: `@MainActor` for UI safety
 - **Protocols**: Accepts `SelectionReading` and `ConceptLookupClient` for testability
 
@@ -178,7 +181,7 @@ flowchart TB
 
 #### `HotKeySettings.swift` (and variants)
 - **Role**: Hotkey configuration singletons
-- **Files**: `HotKeySettings`, `SearchHotKeySettings`, `ReplaceHotKeySettings`, `ECLFormatHotKeySettings`
+- **Files**: `HotKeySettings`, `SearchHotKeySettings`, `ReplaceHotKeySettings`, `ECLFormatHotKeySettings`, `ShrimpHotKeySettings`
 - **Responsibilities**:
   - Store key code and modifiers for each hotkey
   - Persist settings to UserDefaults
@@ -235,6 +238,14 @@ flowchart TB
 - **Responsibilities**:
   - Validate SNOMED CT IDs using Verhoeff check digit algorithm
   - Distinguish SNOMED CT codes from other numeric codes
+
+#### `ShrimpURLBuilder.swift`
+- **Role**: Shrimp browser URL construction
+- **Responsibilities**:
+  - Build Shrimp browser URLs from concept lookup results
+  - Handle code system-specific URL patterns (SNOMED CT, LOINC, ICD-10, RxNorm)
+  - Construct appropriate version URIs and ValueSet parameters
+  - Include dynamic FHIR endpoint in URLs
 
 #### `ECLParser.swift` (and related)
 - **Role**: Expression Constraint Language parser

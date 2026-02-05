@@ -118,6 +118,10 @@ struct PopoverView: View {
                     .accessibilityHint("Copies code and display name to clipboard")
                 }
                 Spacer()
+                Button("Open in Shrimp") { model.openInShrimp() }
+                    .disabled(model.result == nil)
+                    .accessibilityLabel("Open in Shrimp Browser")
+                    .accessibilityHint("Opens this concept in the Shrimp terminology browser")
             }
             .padding(.top, 6)
 
