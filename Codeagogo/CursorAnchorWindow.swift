@@ -3,6 +3,9 @@ import Cocoa
 final class CursorAnchorWindow {
     private var window: NSWindow?
 
+    /// Public accessor for the underlying window (used to get window position).
+    var nsWindow: NSWindow? { window }
+
     func showPopover(_ popover: NSPopover, at point: NSPoint, preferredEdge: NSRectEdge = .maxY) {
         let frame = NSRect(x: point.x, y: point.y, width: 1, height: 1)
 

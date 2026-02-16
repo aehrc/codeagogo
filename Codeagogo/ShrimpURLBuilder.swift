@@ -70,11 +70,16 @@ struct ShrimpURLBuilder {
             // Example: http://snomed.info/sct/32506021000036107
 
             if let moduleId = moduleId {
-                let versionURI = "http://snomed.info/sct/\(moduleId)"
+                // Map SNOMED CT Core module to International edition for Shrimp
+                // 900000000000012004 = SNOMED CT Core module (not a proper edition)
+                // 900000000000207008 = SNOMED CT International edition
+                let mappedModuleId = (moduleId == "900000000000012004") ? "900000000000207008" : moduleId
+
+                let versionURI = "http://snomed.info/sct/\(mappedModuleId)"
                 queryItems.append(URLQueryItem(name: "version", value: versionURI))
 
                 // ValueSet: http://snomed.info/sct/[moduleId]?fhir_vs
-                let valuesetURI = "http://snomed.info/sct/\(moduleId)?fhir_vs"
+                let valuesetURI = "http://snomed.info/sct/\(mappedModuleId)?fhir_vs"
                 queryItems.append(URLQueryItem(name: "valueset", value: valuesetURI))
             } else {
                 // Fallback: use International edition if no module/version info

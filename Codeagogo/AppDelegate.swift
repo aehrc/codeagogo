@@ -80,6 +80,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The search panel controller for the concept search feature.
     private let searchPanel = SearchPanelController()
 
+    /// The visualization panel controller for concept diagrams.
+    private let visualizationPanel = VisualizationPanelController()
+
     /// Active Combine subscriptions for settings observation.
     private var cancellables = Set<AnyCancellable>()
 
@@ -196,6 +199,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.contentViewController = NSHostingController(
             rootView: PopoverView().environmentObject(model)
         )
+
+        // Wire visualization callback
+        model.onVisualize = { [weak self] result in
+            guard let self = self else { return }
+            // Get popover location (or fall back to mouse location)
+            let point: NSPoint
+            if let anchorWindow = self.cursorAnchor.nsWindow {
+                point = anchorWindow.frame.origin
+            } else {
+                point = NSEvent.mouseLocation
+            }
+            self.visualizationPanel.show(for: result, near: point)
+        }
 
         // Close the cursor anchor window and restore focus when the popover closes
         NotificationCenter.default.addObserver(

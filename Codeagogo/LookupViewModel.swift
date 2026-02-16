@@ -107,6 +107,11 @@ final class LookupViewModel: ObservableObject {
     private let selectionReader: SelectionReading
     private let client: ConceptLookupClient
 
+    // MARK: - Callbacks
+
+    /// Callback for opening visualization panel
+    var onVisualize: ((ConceptResult) -> Void)?
+
     // MARK: - Initialization
 
     /// Creates a new lookup view model with optional custom dependencies.
@@ -370,6 +375,15 @@ final class LookupViewModel: ObservableObject {
 
         AppLog.info(AppLog.general, "Opening concept in Shrimp: \(url)")
         NSWorkspace.shared.open(url)
+    }
+
+    /// Opens visualization panel for current result.
+    func openVisualization() {
+        guard let result = result else {
+            AppLog.warning(AppLog.general, "Cannot open visualization: no result")
+            return
+        }
+        onVisualize?(result)
     }
 
     /// Looks up a concept from text and opens it in the Shrimp browser.

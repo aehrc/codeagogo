@@ -10,12 +10,32 @@ struct PopoverView: View {
                 Text("Codeagogo")
                     .font(.headline)
                 Spacer()
+
                 if model.isLoading {
                     ProgressView()
                         .scaleEffect(0.8)
                         .accessibilityIdentifier("popover.loading")
                         .accessibilityLabel("Loading concept data")
                 }
+
+                // Action buttons
+                Button("Diagram") {
+                    model.openVisualization()
+                }
+                .disabled(model.result == nil)
+                .font(.caption)
+                .accessibilityLabel("Show Diagram")
+
+                Button(action: { model.openInShrimp() }) {
+                    HStack(spacing: 4) {
+                        Text("Browser")
+                        Image(systemName: "arrow.up.forward.app")
+                            .font(.system(size: 11))
+                    }
+                }
+                .disabled(model.result == nil)
+                .font(.caption)
+                .accessibilityLabel("Open in Browser")
             }
 
             if let err = model.errorMessage {
@@ -117,11 +137,6 @@ struct PopoverView: View {
                     .accessibilityLabel("Copy Code and Display")
                     .accessibilityHint("Copies code and display name to clipboard")
                 }
-                Spacer()
-                Button("Open in Shrimp") { model.openInShrimp() }
-                    .disabled(model.result == nil)
-                    .accessibilityLabel("Open in Shrimp Browser")
-                    .accessibilityHint("Opens this concept in the Shrimp terminology browser")
             }
             .padding(.top, 6)
 

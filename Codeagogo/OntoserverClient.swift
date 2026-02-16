@@ -270,6 +270,14 @@ final class OntoserverClient: ConceptSearching, @unchecked Sendable {
 
     /// Thread-safe LRU cache for lookup results.
     private let cache = ConceptCache()
+    private let propertyCache = PropertyCache()
+
+    /// User-Agent header value for identifying this application in server logs.
+    private var userAgent: String {
+        let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "Codeagogo"
+        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+        return "\(appName)/\(appVersion) (macOS)"
+    }
 
     /// Creates a new Ontoserver client.
     ///
@@ -277,6 +285,7 @@ final class OntoserverClient: ConceptSearching, @unchecked Sendable {
     init(session: URLSession = .shared) {
         self.session = session
         AppLog.info(AppLog.network, "OntoserverClient init base=\(baseURL.absoluteString)")
+        AppLog.info(AppLog.network, "OntoserverClient User-Agent: \(userAgent)")
     }
 
     /// Looks up a SNOMED CT concept by its identifier.
@@ -316,6 +325,100 @@ final class OntoserverClient: ConceptSearching, @unchecked Sendable {
         await cache.set(conceptId, result: result)
         AppLog.info(AppLog.network, "lookup success conceptId=\(conceptId) edition=\(result.branch)")
         return result
+    }
+
+    /// Looks up a concept with all properties using `property=*`.
+    ///
+    /// This method fetches all available properties for a concept, including
+    /// relationships and attributes. Used for visualization purposes.
+    ///
+    /// - Parameters:
+    ///   - conceptId: The concept identifier
+    ///   - system: The code system URI
+    ///   - version: The code system version URI
+    /// - Returns: Array of all concept properties
+    /// - Throws: Network or parsing errors
+    func lookupWithProperties(conceptId: String, system: String, version: String) async throws -> [ConceptProperty] {
+        // Check cache first
+        if let cached = await propertyCache.get(conceptId: conceptId, system: system, version: version, ttl: NetworkConstants.cacheTTL) {
+            AppLog.debug(AppLog.network, "property cache hit conceptId=\(conceptId)")
+            return cached
+        }
+
+        guard var comps = URLComponents(url: baseURL.appendingPathComponent("CodeSystem/$lookup"), resolvingAgainstBaseURL: false) else {
+            throw OntoserverError.invalidURL("Cannot create URL components from base URL")
+        }
+
+        var queryItems = [
+            URLQueryItem(name: "system", value: system),
+            URLQueryItem(name: "code", value: conceptId),
+            URLQueryItem(name: "property", value: "*"),
+            URLQueryItem(name: "_format", value: "json")
+        ]
+
+        // Only add version if it's not empty
+        if !version.isEmpty {
+            queryItems.append(URLQueryItem(name: "version", value: version))
+        }
+
+        comps.queryItems = queryItems
+
+        guard let url = comps.url else {
+            throw OntoserverError.invalidURL("Invalid query parameters for property lookup")
+        }
+
+        AppLog.debug(AppLog.network, "lookupWithProperties conceptId=\(conceptId) system=\(system)")
+
+        let response: FHIRParameters = try await getJSON(url)
+        let properties = parseAllProperties(response)
+
+        // Store in cache
+        await propertyCache.set(conceptId: conceptId, system: system, version: version, properties: properties)
+
+        return properties
+    }
+
+    /// Parses all properties from a FHIR Parameters response.
+    ///
+    /// Extracts property code, value (handling multiple value types), and optional description.
+    private func parseAllProperties(_ params: FHIRParameters) -> [ConceptProperty] {
+        var properties: [ConceptProperty] = []
+
+        for param in params.parameter ?? [] where param.name == "property" {
+            guard let parts = param.part else { continue }
+
+            var code: String?
+            var value: PropertyValue?
+            var display: String?
+
+            for part in parts {
+                if part.name == "code" {
+                    code = part.valueCode
+                } else if part.name == "value" {
+                    // Handle different value types
+                    if let str = part.valueString {
+                        value = .string(str)
+                    } else if let bool = part.valueBoolean {
+                        value = .boolean(bool)
+                    } else if let codeVal = part.valueCode {
+                        value = .code(codeVal)
+                    } else if let coding = part.valueCoding {
+                        value = .coding(coding)
+                    } else if let int = part.valueInteger {
+                        value = .integer(int)
+                    }
+                } else if part.name == "description" {
+                    display = part.valueString
+                }
+            }
+
+            if let code = code, let value = value {
+                properties.append(ConceptProperty(code: code, value: value, display: display))
+            }
+        }
+
+        AppLog.info(AppLog.network, "Parsed \(properties.count) properties")
+        return properties
     }
 
     // MARK: - Batch Lookup (ValueSet/$expand)
@@ -1063,6 +1166,7 @@ final class OntoserverClient: ConceptSearching, @unchecked Sendable {
         req.httpMethod = "POST"
         req.setValue("application/fhir+json", forHTTPHeaderField: "Accept")
         req.setValue("application/fhir+json", forHTTPHeaderField: "Content-Type")
+        req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = NetworkConstants.requestTimeout
 
         let jsonData = try JSONSerialization.data(withJSONObject: body)
@@ -1445,6 +1549,7 @@ final class OntoserverClient: ConceptSearching, @unchecked Sendable {
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.setValue("application/fhir+json", forHTTPHeaderField: "Accept")
+        req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = NetworkConstants.requestTimeout
 
         AppLog.debug(AppLog.network, "request GET url=\(url.absoluteString)")
@@ -1627,6 +1732,84 @@ private actor ConceptCache {
     }
 }
 
+/// Thread-safe cache for concept property lookups with TTL and LRU eviction.
+///
+/// Similar to ConceptCache but optimized for caching property arrays returned
+/// by lookupWithProperties. Uses a composite key of conceptId|system|version
+/// to handle multi-version scenarios.
+private actor PropertyCache {
+    /// Maximum number of cached property results before LRU eviction.
+    private let maxSize = 100
+
+    /// Internal cache entry with timestamps for TTL and LRU tracking.
+    private struct CacheEntry {
+        /// The cached property array.
+        let properties: [ConceptProperty]
+        /// When this entry was first created (for TTL).
+        let createdAt: Date
+        /// When this entry was last accessed (for LRU eviction).
+        var lastAccessedAt: Date
+    }
+
+    /// The underlying storage dictionary keyed by composite key.
+    private var storage: [String: CacheEntry] = [:]
+
+    /// Creates a composite cache key from concept ID, system, and version.
+    private func makeKey(conceptId: String, system: String, version: String) -> String {
+        return "\(conceptId)|\(system)|\(version)"
+    }
+
+    /// Retrieves cached properties if they exist and haven't expired.
+    ///
+    /// - Parameters:
+    ///   - conceptId: The concept identifier
+    ///   - system: The code system URI
+    ///   - version: The version identifier
+    ///   - ttl: Time-to-live in seconds
+    /// - Returns: The cached properties, or `nil` if not found or expired
+    func get(conceptId: String, system: String, version: String, ttl: TimeInterval) -> [ConceptProperty]? {
+        let key = makeKey(conceptId: conceptId, system: system, version: version)
+        guard var entry = storage[key],
+              Date().timeIntervalSince(entry.createdAt) < ttl else {
+            storage.removeValue(forKey: key)
+            return nil
+        }
+        entry.lastAccessedAt = Date()
+        storage[key] = entry
+        return entry.properties
+    }
+
+    /// Stores properties in the cache.
+    ///
+    /// - Parameters:
+    ///   - conceptId: The concept identifier
+    ///   - system: The code system URI
+    ///   - version: The version identifier
+    ///   - properties: The property array to cache
+    func set(conceptId: String, system: String, version: String, properties: [ConceptProperty]) {
+        let key = makeKey(conceptId: conceptId, system: system, version: version)
+
+        if storage[key] == nil && storage.count >= maxSize {
+            evictLeastRecentlyUsed()
+        }
+
+        let now = Date()
+        storage[key] = CacheEntry(
+            properties: properties,
+            createdAt: now,
+            lastAccessedAt: now
+        )
+    }
+
+    /// Removes the least recently used entry from the cache.
+    private func evictLeastRecentlyUsed() {
+        guard let lruKey = storage.min(by: { $0.value.lastAccessedAt < $1.value.lastAccessedAt })?.key else {
+            return
+        }
+        storage.removeValue(forKey: lruKey)
+    }
+}
+
 // MARK: - FHIR Data Structures
 
 /// FHIR Parameters resource returned by the `CodeSystem/$lookup` operation.
@@ -1655,6 +1838,7 @@ struct FHIRParameters: Decodable {
         let valueCode: String?
         let valueBoolean: Bool?
         let valueCoding: Coding?
+        let valueInteger: Int?
     }
 
     /// A FHIR Coding data type representing a code from a code system.
