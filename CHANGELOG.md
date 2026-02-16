@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-02
+
 ### Added
 - **Concept visualization panel**: New "Visualize" button in lookup popover opens a floating panel showing concept properties and relationships
   - SNOMED CT concepts display relationship diagrams following SNOMED CT Diagramming specification
