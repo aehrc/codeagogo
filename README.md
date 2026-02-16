@@ -1,12 +1,16 @@
-# Codeagogo
+<div align="center">
+  <img src="icon.png" alt="Codeagogo Icon" width="128" height="128">
 
-![CI](https://github.com/aehrc/codeagogo/actions/workflows/ci.yml/badge.svg)
-![platform](https://img.shields.io/badge/platform-macOS%2013%2B-blue)
-![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)
-![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-red)
-![License](https://img.shields.io/badge/license-CSIRO-lightgrey)
+  # Codeagogo
 
-A macOS menu bar utility for working with clinical terminology codes. Look up SNOMED CT, LOINC, ICD-10, and other code systems from any application using global hotkeys.
+  ![CI](https://github.com/aehrc/codeagogo/actions/workflows/ci.yml/badge.svg)
+  ![platform](https://img.shields.io/badge/platform-macOS%2013%2B-blue)
+  ![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)
+  ![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-red)
+  ![License](https://img.shields.io/badge/license-CSIRO-lightgrey)
+
+  A macOS menu bar utility for working with clinical terminology codes. Look up SNOMED CT, LOINC, ICD-10, and other code systems from any application using global hotkeys.
+</div>
 
 > **Note:** This is a developer/terminology power tool intended for internal use at CSIRO/AEHRC.
 
