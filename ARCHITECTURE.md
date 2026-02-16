@@ -49,6 +49,7 @@ flowchart TB
             MenuBar["Menu Bar<br/>Status Item"]
             Popover["Popover View<br/>(SwiftUI)"]
             SearchPanel["Search Panel<br/>(SwiftUI)"]
+            VisualizationPanel["Visualization Panel<br/>(SwiftUI + WebView)"]
             Settings["Settings View<br/>(SwiftUI)"]
             ProgressHUD["Progress HUD"]
         end
@@ -57,6 +58,7 @@ flowchart TB
             AppDelegate["App Delegate"]
             LookupVM["Lookup ViewModel<br/>(@MainActor)"]
             SearchVM["Search ViewModel<br/>(@MainActor)"]
+            VisualizationVM["Visualization ViewModel<br/>(@MainActor)"]
             HotKeySettings["HotKey Settings<br/>(5 Singletons)"]
             CodeSystemSettings["Code System Settings"]
         end
@@ -66,10 +68,13 @@ flowchart TB
             SelectionReader["Selection Reader<br/>(AppKit + AX API)"]
             ECLParser["ECL Parser<br/>(Lexer + AST)"]
             SCTIDValidator["SCTID Validator<br/>(Verhoeff)"]
+            SNOMEDParser["SNOMED Expression Parser<br/>(Compositional Grammar)"]
+            DiagramRenderer["Diagram Renderer<br/>(SVG Generation)"]
             subgraph OntoClient["Ontoserver Client"]
                 FHIRParser["FHIR Parser"]
                 BatchLookup["Batch Lookup<br/>(ValueSet/$expand)"]
                 Cache["Cache<br/>(Actor)"]
+                PropertyCache["Property Cache<br/>(Actor)"]
             end
         end
     end
@@ -79,12 +84,18 @@ flowchart TB
     MenuBar --> AppDelegate
     Popover --> LookupVM
     SearchPanel --> SearchVM
+    VisualizationPanel --> VisualizationVM
     AppDelegate --> LookupVM
     AppDelegate --> SearchVM
+    AppDelegate --> VisualizationVM
     AppDelegate --> GlobalHotKey
     LookupVM --> SelectionReader
     LookupVM --> OntoClient
     SearchVM --> OntoClient
+    VisualizationVM --> OntoClient
+    VisualizationVM --> SNOMEDParser
+    VisualizationVM --> DiagramRenderer
+    DiagramRenderer --> SNOMEDParser
     AppDelegate --> ECLParser
     LookupVM --> SCTIDValidator
     OntoClient --> Server
@@ -134,6 +145,22 @@ flowchart TB
   - Position panel near cursor
   - Handle panel show/hide
 
+#### `VisualizationPanelView.swift`
+- **Role**: Concept visualization UI
+- **Responsibilities**:
+  - Display WebView with HTML/SVG diagram
+  - Show loading and error states
+  - Handle download requests via JavaScript bridge
+  - Sanitize filenames for SVG/PNG exports
+  - Generate meaningful export names (e.g., `73211009-diabetes-mellitus.svg`)
+
+#### `VisualizationPanelController.swift`
+- **Role**: NSWindow management for visualization panel
+- **Responsibilities**:
+  - Create floating panel window (follows SearchPanelController pattern)
+  - Position panel to right of popover (or left if insufficient space)
+  - Handle panel show/hide and lifecycle
+
 #### `SettingsView.swift`
 - **Role**: Application preferences UI
 - **Responsibilities**:
@@ -178,6 +205,17 @@ flowchart TB
   - Debounce search queries
   - Format selected concept for insertion
   - Handle code system and edition selection
+
+#### `VisualizationViewModel.swift`
+- **Role**: MVVM view model for concept visualization
+- **Responsibilities**:
+  - Fetch properties for concepts using `property=*` parameter (lazy loading)
+  - Extract concept IDs from normal form for definition status lookups
+  - Handle multiple parents for primitive concepts
+  - Fetch definition status and display names in parallel using TaskGroup
+  - Manage loading/error states
+  - Provide VisualizationData to view
+- **Annotations**: `@MainActor` for UI safety
 
 #### `HotKeySettings.swift` (and variants)
 - **Role**: Hotkey configuration singletons
@@ -247,6 +285,30 @@ flowchart TB
   - Construct appropriate version URIs and ValueSet parameters
   - Include dynamic FHIR endpoint in URLs
 
+#### `SNOMEDExpressionParser.swift`
+- **Role**: SNOMED CT compositional grammar parser
+- **Responsibilities**:
+  - Parse `normalForm` and `normalFormTerse` property values
+  - Support definition status operators (≡ for defined, ⊑ for primitive)
+  - Parse focus concepts (parents), refinements, attribute groups
+  - Handle concept references with pipe-delimited terms (e.g., `73211009 |Diabetes mellitus|`)
+  - Support concrete values and nested expressions
+  - Preprocess normal form to remove line breaks and normalize whitespace
+  - Generate AST for diagram rendering
+
+#### `DiagramRenderer.swift`
+- **Role**: SVG diagram generation
+- **Responsibilities**:
+  - Generate HTML with embedded SVG following SNOMED CT Diagramming Specification
+  - Render SNOMED CT relationship diagrams with focus concepts, definition status symbols (≡/○), attributes, and role groups
+  - Generate LOINC/other system property lists with colored boxes
+  - Handle multiple parents with vertical junction lines
+  - Draw attribute groups (filled circles), ungrouped attributes (open circles)
+  - Render attributes (tan rounded rectangles) and values (blue rectangles)
+  - Pass concept ID and term to JavaScript for meaningful export filenames
+  - Provide zoom controls and SVG/PNG download functionality
+  - Fall back to text display if parsing fails
+
 #### `ECLParser.swift` (and related)
 - **Role**: Expression Constraint Language parser
 - **Files**: `ECLLexer.swift`, `ECLToken.swift`, `ECLAST.swift`, `ECLParser.swift`, `ECLFormatter.swift`
@@ -261,15 +323,17 @@ flowchart TB
 - **Role**: FHIR terminology server client
 - **Responsibilities**:
   - Query FHIR `CodeSystem/$lookup` endpoint
+  - Query with `property=*` for visualization (lazy loading)
   - Batch lookup via `ValueSet/$expand` (15x faster for bulk operations)
   - Search concepts via `ValueSet/$expand` with filter
   - Fetch available SNOMED CT editions
   - Fetch available non-SNOMED code systems
   - Lookup in configured code systems (parallel search)
-  - Parse FHIR Parameters responses
-  - Manage in-memory cache
+  - Parse FHIR Parameters responses including property values
+  - Manage in-memory caches (concept results and properties)
   - Handle multi-edition fallback
   - Implement retry with exponential backoff
+  - Send `User-Agent: Codeagogo/{version} (macOS)` header for server log identification
 
 #### `ConceptCache` (Actor)
 - **Role**: Thread-safe result cache
@@ -278,6 +342,14 @@ flowchart TB
   - Implement TTL-based expiration (6 hours)
   - Implement LRU eviction at capacity (100 entries)
   - Track access patterns for LRU
+
+#### `PropertyCache` (Actor)
+- **Role**: Thread-safe property cache for visualization
+- **Responsibilities**:
+  - Store property arrays with timestamps
+  - Implement TTL-based expiration (6 hours)
+  - Keyed by conceptId, system, and version
+  - Separate from ConceptCache to avoid pollution
 
 ### Data Models
 
@@ -337,6 +409,41 @@ struct ConceptMatch {
 }
 ```
 
+#### `VisualizationData`
+```swift
+struct VisualizationData {
+    let concept: ConceptResult           // Base concept info
+    let properties: [ConceptProperty]    // All properties from property=*
+    let definitionStatusMap: [String: Bool]  // conceptId → isDefined
+    let displayNameMap: [String: String]     // conceptId → display name
+
+    var isSNOMEDCT: Bool  // Computed from concept
+}
+```
+
+#### `ConceptProperty`
+```swift
+struct ConceptProperty: Identifiable {
+    let id: UUID
+    let code: String           // Property code (e.g., "effectiveTime", "parent")
+    let value: PropertyValue   // Property value (string, boolean, code, coding, integer)
+    let display: String?       // Human-readable description
+}
+```
+
+#### `PropertyValue`
+```swift
+enum PropertyValue {
+    case string(String)
+    case boolean(Bool)
+    case code(String)
+    case coding(FHIRParameters.Coding)
+    case integer(Int)
+
+    var displayString: String  // Converts to human-readable string
+}
+```
+
 #### `OntoserverError`
 ```swift
 enum OntoserverError: LocalizedError {
@@ -391,6 +498,33 @@ flowchart TD
         L --> M[Return first successful result]
         M --> N[5. Cache Result and Return]
     end
+```
+
+### Visualization Flow
+
+```mermaid
+flowchart TD
+    A[User clicks<br/>"Visualize" button] --> B[LookupViewModel]
+    B --> C[VisualizationPanelController]
+    C --> D[Create/Show Panel]
+    D --> E[VisualizationViewModel]
+    E --> F{Property<br/>Cache?}
+    F -->|Hit| G[Render Diagram]
+    F -->|Miss| H["OntoserverClient<br/>lookupWithProperties<br/>(property=*)"]
+    H --> I[Parse Properties]
+    I --> J[Extract concept IDs<br/>from normalForm]
+    J --> K["Parallel TaskGroup:<br/>Lookup each ID for<br/>definition status + display"]
+    K --> L[Build VisualizationData]
+    L --> M{SNOMED CT?}
+    M -->|Yes| N[SNOMEDExpressionParser<br/>Parse normalForm]
+    N --> O[DiagramRenderer<br/>Generate SVG]
+    M -->|No| P[DiagramRenderer<br/>Generate property list]
+    O --> Q[WebView displays HTML/SVG]
+    P --> Q
+    Q --> R[User exports SVG/PNG]
+    R --> S[JavaScript postMessage<br/>with concept ID + term]
+    S --> T[Sanitize filename<br/>Remove tags, special chars]
+    T --> U[Save panel with<br/>meaningful name]
 ```
 
 ## Concurrency Model

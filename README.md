@@ -72,6 +72,20 @@ Open concepts in the Shrimp terminology browser:
 - Also available as "Open in Shrimp" button in the lookup popover
 - Uses the configured FHIR terminology server URL
 
+### Concept Visualization
+
+Visualize concept definitions and relationships:
+- **SNOMED CT**: Relationship diagrams following SNOMED CT Diagramming Specification
+  - Shows focus concepts (parents), definition status (defined ≡ or primitive ○)
+  - Displays attribute groups with role relationships
+  - Renders attributes and values with proper connecting lines
+  - Multiple parents connected with vertical junction lines
+- **LOINC & Others**: Property lists with colored key-value boxes
+- **Interactive**: Zoom in/out, pan, reset view
+- **Export**: Download as SVG or PNG with meaningful filenames (e.g., `73211009-diabetes-mellitus.svg`)
+- **Lazy loading**: Properties fetched only when visualization is requested
+- Access via "Visualize" button in the lookup popover
+
 ### Multi-Code-System Support
 
 In addition to SNOMED CT, Codeagogo supports:
