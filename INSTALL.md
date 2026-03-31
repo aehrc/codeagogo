@@ -22,7 +22,7 @@ Skip to [Accessibility permission](#accessibility-permission-required) below.
 ## Manual installation
 
 ### 1. Download
-Download the latest `Codeagogo-macOS.zip` from the project’s **Releases** page.
+Download the latest `Codeagogo-macOS.zip` from the [Releases page](https://github.com/aehrc/codeagogo/releases/latest).
 
 ---
 
