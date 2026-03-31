@@ -1,0 +1,863 @@
+# Codeagogo Architecture
+
+This document describes the technical architecture of Codeagogo, a macOS menu bar application for working with clinical terminology codes.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [System Architecture](#system-architecture)
+- [Component Details](#component-details)
+- [Data Flow](#data-flow)
+- [Concurrency Model](#concurrency-model)
+- [Caching Strategy](#caching-strategy)
+- [Error Handling](#error-handling)
+- [Security Considerations](#security-considerations)
+- [Dependencies](#dependencies)
+- [Design Decisions](#design-decisions)
+
+## Overview
+
+Codeagogo is a macOS utility that provides global hotkeys for working with clinical terminology codes (SNOMED CT, LOINC, ICD-10, etc.) from any application.
+
+### Key Capabilities
+
+| Hotkey | Feature | Description |
+|--------|---------|-------------|
+| `Control+Option+L` | **Lookup** | Display concept details for selected code |
+| `Control+Option+S` | **Search** | Find concepts by term and insert into document |
+| `Control+Option+R` | **Replace** | Annotate codes with `ID \| term \|` format |
+| `Control+Option+E` | **ECL Format** | Pretty-print or minify ECL expressions |
+| `Control+Option+V` | **ECL Workbench** | Monaco-based ECL editor with live evaluation |
+| `Control+Option+H` | **Shrimp** | Open concept in Shrimp terminology browser |
+
+### Key Characteristics
+
+- **Menu Bar Application** — Runs as a background process with menu bar presence
+- **Six Global Hotkeys** — Lookup, Search, Replace, ECL Format, ECL Workbench, and Shrimp
+- **Multi-Code-System** — SNOMED CT, LOINC, ICD-10, RxNorm, and configurable systems
+- **FHIR Integration** — Queries FHIR R4 terminology servers
+- **Batch Operations** — Fast bulk lookups via `ValueSet/$expand`
+- **ECL 2.x Support** — Full Expression Constraint Language parsing and formatting via ecl-core
+- **SwiftUI Interface** — Modern declarative UI framework
+- **Actor-Based Concurrency** — Thread-safe operations using Swift actors
+
+## System Architecture
+
+```mermaid
+flowchart TB
+    subgraph App["Codeagogo Application"]
+        subgraph Presentation["Presentation Layer"]
+            MenuBar["Menu Bar<br/>Status Item"]
+            Popover["Popover View<br/>(SwiftUI)"]
+            SearchPanel["Search Panel<br/>(SwiftUI)"]
+            VisualizationPanel["Visualization Panel<br/>(SwiftUI + WebView)"]
+            ECLWorkbench["ECL Workbench<br/>(WKWebView + Monaco)"]
+            ECLRefPanel["ECL Reference Panel<br/>(SwiftUI)"]
+            Settings["Settings View<br/>(SwiftUI)"]
+            ProgressHUD["Progress HUD"]
+        end
+
+        subgraph Application["Application Layer"]
+            AppDelegate["App Delegate"]
+            LookupVM["Lookup ViewModel<br/>(@MainActor)"]
+            SearchVM["Search ViewModel<br/>(@MainActor)"]
+            VisualizationVM["Visualization ViewModel<br/>(@MainActor)"]
+            EvaluateVM["Evaluate ViewModel<br/>(@MainActor)"]
+            HotKeySettings["HotKey Settings<br/>(6 Singletons)"]
+            CodeSystemSettings["Code System Settings"]
+        end
+
+        subgraph Service["Service Layer"]
+            GlobalHotKey["Global HotKeys<br/>(Carbon, 6 keys)"]
+            SelectionReader["Selection Reader<br/>(AppKit + AX API)"]
+            ECLBridge["ECL Bridge<br/>(ecl-core via JSC)"]
+            SCTIDValidator["SCTID Validator<br/>(Verhoeff)"]
+            SNOMEDParser["SNOMED Expression Parser<br/>(Compositional Grammar)"]
+            DiagramRenderer["Diagram Renderer<br/>(SVG Generation)"]
+            subgraph OntoClient["Ontoserver Client"]
+                FHIRParser["FHIR Parser"]
+                BatchLookup["Batch Lookup<br/>(ValueSet/$expand)"]
+                Cache["Cache<br/>(Actor)"]
+                PropertyCache["Property Cache<br/>(Actor)"]
+            end
+        end
+    end
+
+    Server[("FHIR Terminology Server<br/>(Ontoserver)<br/>via HTTPS")]
+
+    MenuBar --> AppDelegate
+    Popover --> LookupVM
+    SearchPanel --> SearchVM
+    VisualizationPanel --> VisualizationVM
+    ECLWorkbench --> EvaluateVM
+    AppDelegate --> LookupVM
+    AppDelegate --> SearchVM
+    AppDelegate --> VisualizationVM
+    AppDelegate --> EvaluateVM
+    AppDelegate --> GlobalHotKey
+    LookupVM --> SelectionReader
+    LookupVM --> OntoClient
+    SearchVM --> OntoClient
+    VisualizationVM --> OntoClient
+    EvaluateVM --> OntoClient
+    VisualizationVM --> SNOMEDParser
+    VisualizationVM --> DiagramRenderer
+    DiagramRenderer --> SNOMEDParser
+    AppDelegate --> ECLBridge
+    ECLRefPanel --> ECLBridge
+    LookupVM --> SCTIDValidator
+    OntoClient --> Server
+```
+
+## Component Details
+
+### Presentation Layer
+
+#### `CodeagogoApp.swift`
+- **Role**: Application entry point (`@main`)
+- **Responsibilities**:
+  - Define the SwiftUI App structure
+  - Configure the Settings scene
+  - Add Help menu commands for diagnostics
+
+#### `AppDelegate.swift`
+- **Role**: NSApplication delegate
+- **Responsibilities**:
+  - Set up the menu bar status item
+  - Manage the popover and search panel lifecycle
+  - Register and handle six global hotkeys (Lookup, Search, Replace, ECL Format, ECL Workbench, Shrimp)
+  - Coordinate lookup, replace, ECL format, and ECL Workbench operations
+  - Validate concepts in background after ECL format/evaluate (`validateConceptsInBackground`, `validateConcepts`, `buildConceptWarnings`) — inactive or unknown concepts trigger warning HUD
+  - Show precedence warnings when formatting ECL with mixed AND/OR/MINUS operators
+  - Manage ECL Reference panel lifecycle
+  - React to hotkey setting changes via Combine
+
+#### `PopoverView.swift`
+- **Role**: Lookup result display UI
+- **Responsibilities**:
+  - Display concept lookup results (adapts for SNOMED CT vs other systems)
+  - Show inactive concept highlighting (orange warning)
+  - Provide copy-to-clipboard buttons
+  - Provide "Open in Shrimp" button to view concept in Shrimp browser
+  - Show loading and error states
+
+#### `SearchPanelView.swift`
+- **Role**: Search and insert UI
+- **Responsibilities**:
+  - Typeahead search interface
+  - Code system and edition selection
+  - Insert format selection (ID, PT, FSN, ID|PT, ID|FSN)
+  - Display search results with PT, FSN, ID, and edition
+
+#### `SearchPanelController.swift`
+- **Role**: NSWindow management for search panel
+- **Responsibilities**:
+  - Create floating panel window
+  - Position panel near cursor
+  - Handle panel show/hide
+
+#### `VisualizationPanelView.swift`
+- **Role**: Concept visualization UI
+- **Responsibilities**:
+  - Display WebView with HTML/SVG diagram
+  - Show loading and error states
+  - Handle download requests via JavaScript bridge
+  - Sanitize filenames for SVG/PNG exports
+  - Generate meaningful export names (e.g., `73211009-diabetes-mellitus.svg`)
+
+#### `VisualizationPanelController.swift`
+- **Role**: NSWindow management for visualization panel
+- **Responsibilities**:
+  - Create floating panel window (follows SearchPanelController pattern)
+  - Position panel to right of popover (or left if insufficient space)
+  - Handle panel show/hide and lifecycle
+
+#### `ECLEditorView.swift`
+- **Role**: ECL Workbench UI (Monaco-based ECL editor with live evaluation)
+- **Responsibilities**:
+  - Host a `WKWebView` loading the `@aehrc/ecl-editor` web component (`ecl-editor.standalone.js`, ~922KB bundled app resource)
+  - Provide a full Monaco editor with ECL syntax highlighting, bracket matching, and minimap
+  - FHIR-powered autocomplete (concept and description suggestions from terminology server)
+  - Inline diagnostics: parse errors and warnings displayed in the editor gutter
+  - Formatting via Shift+Alt+F; display term toggle via Shift+Alt+T; hover info on concept IDs
+  - Live evaluation with 1-second debounce; Cmd+Enter for immediate evaluation
+  - Resizable split between editor and results pane via drag handle
+  - Communicate between Swift and the web component via `WKScriptMessageHandler` (postMessage bridge)
+  - Monaco loaded from CDN (jsdelivr)
+- **Resource**: `ecl-editor.standalone.js` — standalone build of the `@aehrc/ecl-editor` npm package, loaded as an app bundle resource into WKWebView
+
+#### `EvaluatePanelView.swift`
+- **Role**: ECL evaluation results display (embedded in ECL Workbench)
+- **Responsibilities**:
+  - Display total count of matching SNOMED CT concepts
+  - Show scrollable list of matching concepts
+  - Display semantic validation warnings banner (yellow) for inactive or unknown concepts found in the ECL expression
+  - Show loading and error states
+
+#### `EvaluatePanelController.swift`
+- **Role**: NSWindow management for ECL Workbench panel
+- **Responsibilities**:
+  - Create floating panel window (follows SearchPanelController pattern)
+  - Panel stays visible when switching apps (utility window level)
+  - Position panel near cursor
+  - Handle panel show/hide and lifecycle
+
+#### `ECLReferencePanelView.swift`
+- **Role**: ECL reference documentation UI
+- **Responsibilities**:
+  - Display 50 knowledge articles from ecl-core across 6 categories (operators, refinements, filters, patterns, grammar, history)
+  - Expandable articles with Markdown content, code blocks, tables, and ECL examples
+  - Search/filter field to find articles by keyword
+  - Link to ECL specification
+  - Loaded via `ECLBridge.getArticles()` which returns `KnowledgeArticle` structs
+
+#### `ECLReferencePanelController.swift`
+- **Role**: NSWindow management for ECL reference panel
+- **Responsibilities**:
+  - Create floating panel window (follows SearchPanelController pattern)
+  - Panel stays visible when switching apps (utility window level)
+  - Handle panel show/hide and lifecycle
+
+#### `SettingsView.swift`
+- **Role**: Application preferences UI
+- **Responsibilities**:
+  - Configure six hotkeys via keystroke recorder (Lookup, Search, Replace, ECL Format, ECL Workbench, Shrimp)
+  - Configure FHIR endpoint URL
+  - Configure additional code systems
+  - Configure replace settings (term format, inactive prefix)
+  - Toggle debug logging
+  - Provide diagnostic export functionality
+
+#### `HotKeyRecorderView.swift`
+- **Role**: Keystroke recorder control
+- **Responsibilities**:
+  - Display current hotkey with modifier symbols (⌃⌥⇧⌘)
+  - Enter recording mode on button click
+  - Capture keystroke and update settings
+
+#### `ProgressHUD.swift`
+- **Role**: Progress feedback UI
+- **Responsibilities**:
+  - Display progress message near cursor
+  - Show/hide during batch operations
+  - Show warning HUD (`showWarning()` with `isWarning` state) — yellow styling for semantic validation and precedence warnings
+
+### Application Layer
+
+#### `LookupViewModel.swift`
+- **Role**: MVVM view model for lookups
+- **Responsibilities**:
+  - Coordinate between UI and services
+  - Manage loading/error states
+  - Extract concept IDs from selected text (with SCTID validation)
+  - Extract existing `| term |` patterns for toggle behavior
+  - Trigger lookups and publish results
+  - Open concepts in Shrimp browser (both from popover button and hotkey)
+- **Annotations**: `@MainActor` for UI safety
+- **Protocols**: Accepts `SelectionReading` and `ConceptLookupClient` for testability
+
+#### `SearchViewModel.swift`
+- **Role**: MVVM view model for search
+- **Responsibilities**:
+  - Manage search state and results
+  - Debounce search queries
+  - Format selected concept for insertion
+  - Handle code system and edition selection
+
+#### `VisualizationViewModel.swift`
+- **Role**: MVVM view model for concept visualization
+- **Responsibilities**:
+  - Fetch properties for concepts using `property=*` parameter (lazy loading)
+  - Extract concept IDs from normal form for definition status lookups
+  - Handle multiple parents for primitive concepts
+  - Fetch definition status and display names in parallel using TaskGroup
+  - Manage loading/error states
+  - Provide VisualizationData to view
+- **Annotations**: `@MainActor` for UI safety
+
+#### `EvaluateViewModel.swift`
+- **Role**: MVVM view model for ECL evaluation
+- **Responsibilities**:
+  - Parse and validate ECL expressions locally before querying server
+  - Evaluate ECL via terminology server
+  - Manage loading/error states
+  - Provide matching concept list to view
+  - Publish semantic validation warnings (`warnings` property) for inactive or unknown concepts referenced in the ECL expression
+- **Annotations**: `@MainActor` for UI safety
+
+#### `HotKeySettings.swift` (and variants)
+- **Role**: Hotkey configuration singletons
+- **Files**: `HotKeySettings`, `SearchHotKeySettings`, `ReplaceHotKeySettings`, `ECLFormatHotKeySettings`, `EvaluateHotKeySettings`, `ShrimpHotKeySettings`
+- **Responsibilities**:
+  - Store key code and modifiers for each hotkey
+  - Persist settings to UserDefaults
+  - Convert between NSEvent.ModifierFlags and Carbon modifiers
+  - Provide human-readable hotkey description via `KeyCodeFormatter`
+
+#### `CodeSystemSettings.swift`
+- **Role**: Multi-code-system configuration
+- **Responsibilities**:
+  - Store enabled code systems (LOINC, ICD-10, etc.)
+  - Persist to UserDefaults
+  - Provide list of systems for lookup fallback
+
+#### `ReplaceSettings.swift`
+- **Role**: Replace hotkey configuration
+- **Responsibilities**:
+  - Store term format preference (FSN vs PT)
+  - Store inactive prefix option
+  - Persist to UserDefaults
+
+#### `EvaluateSettings.swift`
+- **Role**: ECL evaluate configuration
+- **Responsibilities**:
+  - Store maximum number of results to display (default 50)
+  - Persist to UserDefaults
+
+#### `FHIROptions.swift`
+- **Role**: FHIR endpoint configuration singleton
+- **Responsibilities**:
+  - Store custom FHIR server URL
+  - Validate URL format
+  - Fall back to default endpoint for invalid URLs
+  - Persist settings to UserDefaults
+
+### Service Layer
+
+#### `GlobalHotKey.swift`
+- **Role**: System-wide hotkey registration
+- **Responsibilities**:
+  - Register Carbon event handlers (supports multiple hotkeys via `id` parameter)
+  - Listen for hotkey events
+  - Invoke callback on hotkey press
+  - Support live hotkey updates without app restart
+  - Clean up handlers on deallocation
+- **Framework**: Carbon (legacy but required for global hotkeys)
+
+#### `SystemSelectionReader.swift`
+- **Role**: System text selection capture and manipulation
+- **Responsibilities**:
+  - Snapshot current pasteboard contents
+  - Simulate Cmd+C to copy selection
+  - Read copied text from pasteboard
+  - Restore original pasteboard contents
+  - Paste text via simulated Cmd+V
+  - Select inserted text via Accessibility API or keyboard fallback
+- **Requirement**: Accessibility permission
+
+#### `SCTIDValidator.swift`
+- **Role**: SNOMED CT ID validation
+- **Responsibilities**:
+  - Validate SNOMED CT IDs using Verhoeff check digit algorithm
+  - Distinguish SNOMED CT codes from other numeric codes
+
+#### `ShrimpURLBuilder.swift`
+- **Role**: Shrimp browser URL construction
+- **Responsibilities**:
+  - Build Shrimp browser URLs from concept lookup results
+  - Handle code system-specific URL patterns (SNOMED CT, LOINC, ICD-10, RxNorm)
+  - Construct appropriate version URIs and ValueSet parameters
+  - Include dynamic FHIR endpoint in URLs
+
+#### `SNOMEDExpressionParser.swift`
+- **Role**: SNOMED CT compositional grammar parser
+- **Responsibilities**:
+  - Parse `normalForm` and `normalFormTerse` property values
+  - Support definition status operators (≡ for defined, ⊑ for primitive)
+  - Parse focus concepts (parents), refinements, attribute groups
+  - Handle concept references with pipe-delimited terms (e.g., `73211009 |Diabetes mellitus|`)
+  - Support concrete values and nested expressions
+  - Preprocess normal form to remove line breaks and normalize whitespace
+  - Generate AST for diagram rendering
+
+#### `DiagramRenderer.swift`
+- **Role**: SVG diagram generation
+- **Responsibilities**:
+  - Generate HTML with embedded SVG following SNOMED CT Diagramming Specification
+  - Render SNOMED CT relationship diagrams with focus concepts, definition status symbols (≡/○), attributes, and role groups
+  - Generate LOINC/other system property lists with colored boxes
+  - Handle multiple parents with vertical junction lines
+  - Draw attribute groups (filled circles), ungrouped attributes (open circles)
+  - Render attributes (tan rounded rectangles) and values (blue rectangles)
+  - Pass concept ID and term to JavaScript for meaningful export filenames
+  - Provide zoom controls and SVG/PNG download functionality
+  - Fall back to text display if parsing fails
+
+#### `ECLBridge.swift`
+- **Role**: Bridge to ecl-core (TypeScript) running in JavaScriptCore
+- **Files**: `ECLBridge.swift`, `ecl-core-bundle.js` (bundled app resource)
+- **Responsibilities**:
+  - Format ECL expressions with 9 configurable options
+  - Parse ECL 2.x with structured error reporting (line, column, message)
+  - Validate SNOMED CT concept IDs (Verhoeff check digit)
+  - Extract concept references from ECL expressions
+  - Toggle between pretty and minified formats
+  - Provide ECL knowledge articles (`getArticles()` returning `KnowledgeArticle` structs) for the ECL Reference panel — 50 articles across 6 categories sourced from ecl-core
+- **Implementation**: Loads ecl-core (bundled as a single JS file) into a `JSContext`.
+  Pure computation runs in-process; no external dependencies or Node.js required.
+
+#### `UpdateChecker.swift`
+- **Role**: Check for new releases on GitHub
+- **Responsibilities**:
+  - Query the GitHub Releases API (`/repos/aehrc/codeagogo/releases/latest`)
+  - Compare latest tag semver against the app's `MARKETING_VERSION`
+  - Publish `updateAvailable` state via `@Published` for UI binding
+  - Check on launch and every 24 hours via timer
+  - Persist last check date, latest version, and release URL in UserDefaults
+- **Consumers**: AppDelegate (menu bar badge, menu item), SettingsView (update banner)
+
+#### `OntoserverClient.swift`
+- **Role**: FHIR terminology server client
+- **Responsibilities**:
+  - Query FHIR `CodeSystem/$lookup` endpoint
+  - Query with `property=*` for visualization (lazy loading)
+  - Batch lookup via `ValueSet/$expand` (15x faster for bulk operations)
+  - Search concepts via `ValueSet/$expand` with filter
+  - Fetch available SNOMED CT editions
+  - Fetch available non-SNOMED code systems
+  - Lookup in configured code systems (parallel search)
+  - Parse FHIR Parameters responses including property values
+  - Manage in-memory caches (concept results and properties)
+  - Handle multi-edition fallback
+  - Implement retry with exponential backoff
+  - Send `User-Agent: Codeagogo/{version} (macOS)` header for server log identification
+
+#### `ConceptCache` (Actor)
+- **Role**: Thread-safe result cache
+- **Responsibilities**:
+  - Store lookup results with timestamps
+  - Implement TTL-based expiration (6 hours)
+  - Implement LRU eviction at capacity (100 entries)
+  - Track access patterns for LRU
+
+#### `PropertyCache` (Actor)
+- **Role**: Thread-safe property cache for visualization
+- **Responsibilities**:
+  - Store property arrays with timestamps
+  - Implement TTL-based expiration (6 hours)
+  - Keyed by conceptId, system, and version
+  - Separate from ConceptCache to avoid pollution
+
+### Data Models
+
+#### `ConceptResult`
+```swift
+struct ConceptResult {
+    let conceptId: String      // Code identifier
+    let branch: String         // Edition name (for SNOMED CT) or system name
+    let fsn: String?           // Fully Specified Name (SNOMED CT only)
+    let pt: String?            // Preferred Term / Display
+    let active: Bool?          // Active/inactive status
+    let effectiveTime: String? // Version date
+    let moduleId: String?      // Module identifier
+    let system: String?        // Code system URI (for non-SNOMED)
+
+    var isSNOMEDCT: Bool       // Computed: true if system is SNOMED CT
+    var systemName: String     // Computed: human-readable system name
+}
+```
+
+#### `SearchResult`
+```swift
+struct SearchResult {
+    let code: String           // Concept code
+    let display: String        // Display term (PT)
+    let fsn: String?           // FSN if different from display
+    let editionId: String?     // Edition identifier
+    let editionTitle: String?  // Human-readable edition name
+}
+```
+
+#### `BatchLookupResult`
+```swift
+struct BatchLookupResult {
+    let ptByCode: [String: String]     // Code → Preferred Term
+    let fsnByCode: [String: String]    // Code → Fully Specified Name
+    let activeByCode: [String: Bool]   // Code → Active status
+}
+```
+
+#### `SNOMEDEdition`
+```swift
+struct SNOMEDEdition {
+    let system: String   // "http://snomed.info/sct" or "http://snomed.info/xsct"
+    let version: String  // Edition URI (e.g., "http://snomed.info/sct/32506021000036107")
+    let title: String    // Human-readable name
+}
+```
+
+#### `ConceptMatch`
+```swift
+struct ConceptMatch {
+    let conceptId: String      // Extracted code
+    let range: Range<String.Index>  // Position in source text
+    let existingTerm: String?  // Existing `| term |` if present
+    let isSCTID: Bool          // True if valid SNOMED CT ID (Verhoeff check)
+}
+```
+
+#### `VisualizationData`
+```swift
+struct VisualizationData {
+    let concept: ConceptResult           // Base concept info
+    let properties: [ConceptProperty]    // All properties from property=*
+    let definitionStatusMap: [String: Bool]  // conceptId → isDefined
+    let displayNameMap: [String: String]     // conceptId → display name
+
+    var isSNOMEDCT: Bool  // Computed from concept
+}
+```
+
+#### `ConceptProperty`
+```swift
+struct ConceptProperty: Identifiable {
+    let id: UUID
+    let code: String           // Property code (e.g., "effectiveTime", "parent")
+    let value: PropertyValue   // Property value (string, boolean, code, coding, integer)
+    let display: String?       // Human-readable description
+}
+```
+
+#### `PropertyValue`
+```swift
+enum PropertyValue {
+    case string(String)
+    case boolean(Bool)
+    case code(String)
+    case coding(FHIRParameters.Coding)
+    case integer(Int)
+
+    var displayString: String  // Converts to human-readable string
+}
+```
+
+#### `OntoserverError`
+```swift
+enum OntoserverError: LocalizedError {
+    case invalidURL(String)           // URL construction failed
+    case conceptNotFound(String)      // Concept not in any edition/system
+    case noEditionsFound              // No SNOMED editions available
+}
+```
+
+## Data Flow
+
+### Lookup Flow
+
+```mermaid
+flowchart TD
+    A[User selects text<br/>in any app] --> B[User presses hotkey]
+    B --> C[GlobalHotKey<br/>triggers callback]
+    C --> D[Selection Reader<br/>captures text]
+    D --> E[Extract Concept ID]
+    E --> F[LookupViewModel]
+    F --> G{Cache<br/>Check}
+    G -->|Cache Hit| H[Update UI]
+    G -->|Cache Miss| I[Ontoserver Client]
+    I --> J[Query International<br/>Edition]
+    J --> K{Found?}
+    K -->|Yes| L[Cache Result]
+    L --> H
+    K -->|No| M[Parallel Search<br/>All Editions]
+    M --> N[Return First Match]
+    N --> L
+```
+
+### FHIR API Flow
+
+```mermaid
+flowchart TD
+    subgraph OntoserverClient
+        A[1. Check Cache] --> B{Hit?}
+        B -->|Yes| C[Return cached result]
+        B -->|No| D[2. Query International Edition]
+
+        D --> E["GET /CodeSystem/$lookup<br/>?system=http://snomed.info/sct<br/>&version=.../900000000000207008<br/>&code={conceptId}"]
+        E --> F{Found?}
+        F -->|Yes| G[Cache and return]
+        F -->|No| H[3. Fetch All Editions]
+
+        H --> I["GET /CodeSystem<br/>?url=http://snomed.info/sct,xsct"]
+        I --> J[Parse available editions]
+        J --> K[4. Parallel Lookup]
+
+        K --> L["TaskGroup {<br/>  for edition in editions {<br/>    lookup(conceptId, edition)<br/>  }<br/>}"]
+        L --> M[Return first successful result]
+        M --> N[5. Cache Result and Return]
+    end
+```
+
+### Visualization Flow
+
+```mermaid
+flowchart TD
+    A[User clicks<br/>"Visualize" button] --> B[LookupViewModel]
+    B --> C[VisualizationPanelController]
+    C --> D[Create/Show Panel]
+    D --> E[VisualizationViewModel]
+    E --> F{Property<br/>Cache?}
+    F -->|Hit| G[Render Diagram]
+    F -->|Miss| H["OntoserverClient<br/>lookupWithProperties<br/>(property=*)"]
+    H --> I[Parse Properties]
+    I --> J[Extract concept IDs<br/>from normalForm]
+    J --> K["Parallel TaskGroup:<br/>Lookup each ID for<br/>definition status + display"]
+    K --> L[Build VisualizationData]
+    L --> M{SNOMED CT?}
+    M -->|Yes| N[SNOMEDExpressionParser<br/>Parse normalForm]
+    N --> O[DiagramRenderer<br/>Generate SVG]
+    M -->|No| P[DiagramRenderer<br/>Generate property list]
+    O --> Q[WebView displays HTML/SVG]
+    P --> Q
+    Q --> R[User exports SVG/PNG]
+    R --> S[JavaScript postMessage<br/>with concept ID + term]
+    S --> T[Sanitize filename<br/>Remove tags, special chars]
+    T --> U[Save panel with<br/>meaningful name]
+```
+
+## Concurrency Model
+
+### Swift Concurrency
+
+The application uses Swift's modern concurrency model:
+
+| Component | Isolation | Reason |
+|-----------|-----------|--------|
+| `LookupViewModel` | `@MainActor` | UI state updates |
+| `EvaluateViewModel` | `@MainActor` | UI state updates |
+| `HotKeySettings` | `@MainActor` | UI-bound singleton |
+| `ConceptCache` | `actor` | Thread-safe data access |
+| `OntoserverClient` | None (uses async/await) | I/O-bound operations |
+
+### Parallel Operations
+
+Edition lookups use `TaskGroup` for parallel execution:
+
+```swift
+try await withThrowingTaskGroup(of: ConceptResult?.self) { group in
+    for edition in editions {
+        group.addTask {
+            try await self.lookupInSystem(conceptId: conceptId,
+                                          system: edition.system,
+                                          version: edition.version)
+        }
+    }
+
+    // Return first successful result
+    for try await result in group {
+        if let result = result {
+            group.cancelAll()  // Cancel remaining lookups
+            return result
+        }
+    }
+}
+```
+
+## Caching Strategy
+
+### Cache Properties
+
+| Property | Value | Rationale |
+|----------|-------|-----------|
+| **Type** | In-memory (actor) | Thread-safe, no persistence needed |
+| **TTL** | 6 hours | Balance freshness vs. API load |
+| **Max Size** | 100 entries | Limit memory usage |
+| **Eviction** | LRU (Least Recently Used) | Keep frequently accessed concepts |
+
+### Cache Entry Structure
+
+```swift
+struct CacheEntry {
+    let result: ConceptResult
+    let createdAt: Date       // For TTL calculation
+    var lastAccessedAt: Date  // For LRU tracking
+}
+```
+
+### Cache Operations
+
+- **Get**: Check TTL, update access time, return result
+- **Set**: Evict LRU if at capacity, store with timestamps
+- **Eviction**: Remove entry with oldest `lastAccessedAt`
+
+## Error Handling
+
+### Error Types
+
+```swift
+// Network/API errors
+enum OntoserverError: LocalizedError {
+    case invalidURL(String)
+    case conceptNotFound(String)
+    case noEditionsFound
+}
+
+// User input errors
+enum LookupError: LocalizedError {
+    case notAConceptId
+    case accessibilityPermissionLikelyMissing
+}
+```
+
+### Retry Strategy
+
+For transient network failures:
+
+| Attempt | Delay | Total Wait |
+|---------|-------|------------|
+| 1 | 0s | 0s |
+| 2 | 0.5s | 0.5s |
+| 3 | 1.0s | 1.5s |
+
+Retryable conditions:
+- URLError: timeout, connection lost, DNS failure
+- HTTP 5xx server errors
+
+Non-retryable conditions:
+- HTTP 4xx client errors
+- URL construction failures
+
+## Security Considerations
+
+### Permissions
+
+| Permission | Purpose | Scope |
+|------------|---------|-------|
+| Accessibility | Read selected text via simulated Cmd+C | On-demand only |
+| Network (Outgoing) | FHIR API queries | HTTPS only |
+
+### Data Handling
+
+- **No persistent storage** of user data
+- **Clipboard restoration** after reading
+- **HTTPS-only** network communication
+- **No telemetry** or analytics
+- **App Sandbox disabled** — Required for Accessibility API access to other processes
+
+### Privacy
+
+- Selected text is only read when the user explicitly triggers a lookup
+- Concept IDs are sent to the FHIR server (no personal data)
+- Cache is cleared on app termination
+
+## Dependencies
+
+### System Frameworks
+
+| Framework | Usage |
+|-----------|-------|
+| SwiftUI | User interface |
+| AppKit/Cocoa | Menu bar, pasteboard, windows |
+| Carbon | Global hotkey registration |
+| WebKit | WKWebView for ECL Workbench (Monaco editor) and concept visualization |
+| Foundation | Networking, data, utilities |
+| Combine | Reactive updates for settings |
+| os.log | Structured logging |
+
+### External Services
+
+| Service | Purpose | Endpoint |
+|---------|---------|----------|
+| CSIRO Ontoserver | FHIR terminology server | `https://tx.ontoserver.csiro.au/fhir` |
+
+## Testing Architecture
+
+### Test Tiers
+
+Tests are organized into three tiers using Xcode Test Plans, each with increasing scope and external dependencies:
+
+| Tier | Test Plan | Scope | Dependencies |
+|------|-----------|-------|-------------|
+| 1 — Unit | `Codeagogo-Unit` | Pure logic, data models, parsers | None (headless) |
+| 2 — Integration | `Codeagogo-Integration` | Real FHIR server calls | Network + Ontoserver |
+| 3 — UI | `Codeagogo-UI` | XCUITest for Settings/MenuBar | GUI session |
+
+### Testability Patterns
+
+**Protocol-based dependency injection** enables isolated testing of view models:
+
+```swift
+protocol SelectionReading { ... }
+protocol ConceptLookupClient { ... }
+protocol ConceptSearching: Sendable { ... }
+
+// Production: uses real implementations
+LookupViewModel()
+
+// Tests: inject mocks
+LookupViewModel(selectionReader: MockReader(), client: MockClient())
+```
+
+**Actor-based caching** uses `TestableConceptCache` to expose internal state for assertions without breaking encapsulation in production.
+
+**ViewInspector** (MIT, test target only) provides headless SwiftUI view testing for `SettingsView` and other views without `@MainActor ObservableObject` dependencies.
+
+### Test Organization
+
+```
+CodeagogoTests/
+├── ConceptIdExtractionTests.swift    # Regex extraction, SCTID validation
+├── ConceptCacheTests.swift           # TTL, LRU eviction, thread safety
+├── OntoserverClientTests.swift       # FHIR parsing, errors, retry, multi-system
+├── ECLBridgeTests.swift              # ECL bridge (ecl-core via JSC), hotkey settings
+├── EvaluateTests.swift               # ECL evaluation, settings, hotkey configuration
+├── DiagramRendererUnitTests.swift    # SVG generation, normal form rendering
+├── LookupViewModelTests.swift        # ID extraction, lookup coordination
+├── VisualizationViewModelTests.swift # Property loading, state management
+├── VisualizationModelsTests.swift    # Visualization data models
+├── SNOMEDExpressionParserTests.swift # Compositional grammar parsing
+├── HotKeySettingsTests.swift         # Hotkey configuration
+├── FHIROptionsTests.swift            # FHIR endpoint configuration
+├── InstallMetricsTests.swift         # Install tracking
+├── ShrimpURLBuilderTests.swift       # URL construction
+├── ConceptResultTests.swift          # ConceptResult model
+├── ViewTests/                        # View data model tests
+│   ├── PopoverViewTests.swift        # Lookup result display models
+│   ├── SearchPanelViewTests.swift    # Search result models
+│   ├── SettingsViewTests.swift       # SwiftUI view inspection
+│   └── VisualizationPanelViewTests.swift  # Visualization data models
+└── ...
+```
+
+### Known Limitation
+
+A Swift concurrency back-deploy runtime issue causes `malloc` crashes when `LookupViewModel`, `SearchViewModel`, `VisualizationViewModel`, or `EvaluateViewModel` are instantiated in new test source files. This is triggered by `swift_task_deinitOnExecutorMainActorBackDeploy` when the binary memory layout changes with new compilation units. Existing test files (e.g., `LookupViewModelTests.swift`) are unaffected. New view tests should test data models directly rather than instantiating these view models.
+
+## Design Decisions
+
+### Why Carbon for Hotkeys?
+
+macOS does not provide a modern API for global keyboard shortcuts. The Carbon `RegisterEventHotKey` API remains the only supported way to register system-wide hotkeys that work in any application.
+
+### Why Simulated Cmd+C for Selection?
+
+macOS restricts direct access to selected text across applications. The Accessibility API allows simulating keyboard events, making Cmd+C the most reliable cross-application method for capturing selections.
+
+### Why FHIR Instead of Direct Snowstorm API?
+
+FHIR provides:
+- Standardized response format
+- Multi-edition support in a single endpoint
+- Broader compatibility with terminology servers
+- Better long-term maintainability
+
+### Why Actor for Cache?
+
+Swift actors provide:
+- Compile-time thread safety guarantees
+- No manual locking required
+- Natural async/await integration
+- Clear isolation boundaries
+
+### Why Optional Dependency Injection?
+
+The `LookupViewModel` accepts optional dependencies:
+
+```swift
+init(selectionReader: SelectionReading? = nil,
+     client: ConceptLookupClient? = nil)
+```
+
+This allows:
+- Default production implementations
+- Easy mock injection for testing
+- No breaking changes to existing code

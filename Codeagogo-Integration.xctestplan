@@ -1,0 +1,28 @@
+{
+  "configurations" : [
+    {
+      "id" : "A1B2C3D4-E5F6-A7B8-C9D0-E1F2A3B4C5D6",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "testTimeoutsEnabled" : true,
+    "defaultTestExecutionTimeAllowance" : 60
+  },
+  "testTargets" : [
+    {
+      "selectedTests" : [
+        "IntegrationTests"
+      ],
+      "target" : {
+        "containerPath" : "container:Codeagogo.xcodeproj",
+        "identifier" : "CodeagogoTests",
+        "name" : "CodeagogoTests"
+      }
+    }
+  ],
+  "version" : 1
+}

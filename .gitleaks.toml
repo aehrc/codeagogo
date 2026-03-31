@@ -1,0 +1,23 @@
+# Gitleaks configuration for Codeagogo
+# https://github.com/gitleaks/gitleaks
+
+title = "Codeagogo Gitleaks Config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known safe strings"
+
+paths = [
+    '''\.claude/''',
+    '''\.serena/''',
+    '''openspec/''',
+]
+
+regexes = [
+    # Public Ontoserver URL
+    '''https://tx\.ontoserver\.csiro\.au/fhir''',
+    # Test fixture UUIDs
+    '''[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}''',
+]

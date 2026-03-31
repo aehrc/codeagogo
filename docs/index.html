@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Codeagogo — Clinical Terminology Codes, Everywhere</title>
+  <meta name="description"
+    content="A native desktop app for looking up, searching, and annotating clinical terminology codes. Works in every app on your desktop.">
+  <link rel="icon" href="icon.png" type="image/png">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-icon">
+      <img src="icon.png" alt="Codeagogo" width="96" height="96">
+    </div>
+    <h1>Codeagogo</h1>
+    <p class="tagline">Look up, search, and annotate clinical terminology codes — waiting in your menu bar.</p>
+    <p class="works-everywhere">A native app that works wherever you can select or type text — Word, Excel, your IDE,
+      email...anything.</p>
+    <div class="btn-group">
+      <a href="https://github.com/aehrc/codeagogo/releases/latest" class="btn btn-primary">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+        </svg>
+        Install for macOS
+      </a>
+      <a href="https://github.com/aehrc/codeagogo-win/releases/latest" class="btn btn-outline">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M3 12V6.75l6-1.32v6.48L3 12zm6.13.51l.01 6.48-6.13-1.33V12.6l6.12-.09zm.61-6.6L22 4v8h-12.26V5.91zM22 12.5v7.5l-12.26-1.67V12.5H22z" />
+        </svg>
+        Install for Windows
+      </a>
+      <a href="https://github.com/aehrc/codeagogo" class="btn btn-secondary">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+        </svg>
+        View on GitHub
+      </a>
+    </div>
+    <p style="font-size: 0.85rem; opacity: 0.7; margin-top: 0.5rem;">
+      macOS: <code style="background: rgba(255,255,255,0.15); padding: 0.15em 0.4em; border-radius: 3px;">brew tap aehrc/codeagogo https://github.com/aehrc/codeagogo && brew install --cask codeagogo</code>
+    </p>
+    <div class="hero-screenshot">
+      <img src="screenshot-lookup.png" alt="Codeagogo lookup popover showing concept details">
+    </div>
+  </section>
+
+  <!-- Search & Insert -->
+  <section class="feature stacked">
+    <div class="feature-text">
+      <div class="label">Search & Insert</div>
+      <h2>Find the right concept, fast</h2>
+      <p>Open the search panel with a hotkey, type a few characters, and pick from matching concepts. Insert directly
+        into your document — no need to switch to a browser or terminology tool. Works in Word, Excel, your IDE, or any
+        text field.</p>
+    </div>
+    <div class="feature-image">
+      <img src="demo-search.gif" alt="Animated demo of searching and inserting concepts">
+    </div>
+  </section>
+
+  <hr class="feature-divider">
+
+  <!-- Batch Annotate -->
+  <section class="feature stacked">
+    <div class="feature-text">
+      <div class="label">Batch Annotate</div>
+      <h2>Turn bare codes into readable text</h2>
+      <p>Select a block of text with concept codes, press the hotkey, and every code gets its preferred term added in
+        pipe-delimited format. Works with dozens of codes at once — great for annotating spreadsheets,
+        documents...whatever you have.</p>
+    </div>
+    <div class="feature-image">
+      <img src="demo-replace.gif" alt="Animated demo of batch code annotation">
+    </div>
+  </section>
+
+  <hr class="feature-divider">
+
+  <!-- ECL Formatter -->
+  <section class="feature stacked">
+    <div class="feature-text">
+      <div class="label">ECL Formatter</div>
+      <h2>Make ECL expressions readable</h2>
+      <p>Toggle Expression Constraint Language between minified and pretty-printed with a single hotkey. Indentation,
+        line breaks, and structure — instantly. No more squinting at, or hand formatting, dense ECL expressions.</p>
+    </div>
+    <div class="feature-image">
+      <img src="demo-ecl-format.gif" alt="Animated demo of ECL formatting">
+    </div>
+  </section>
+
+  <hr class="feature-divider">
+
+  <!-- ECL Workbench -->
+  <section class="feature stacked">
+    <div class="feature-text">
+      <div class="label">ECL Workbench</div>
+      <h2>Write, test, and refine ECL expressions</h2>
+      <p>A full ECL editor with syntax highlighting, autocomplete, inline diagnostics, and code actions — powered by
+        Monaco. Write an expression, see matching concepts instantly. Hover over concept IDs for details, use
+        quick fixes to add history supplements or description filters, and toggle display terms with a keystroke.
+        Open concept diagrams or browse them in Shrimp, right from the results.</p>
+    </div>
+    <div class="feature-image">
+      <img src="screenshot-ecl-workbench.png" alt="ECL Workbench with Monaco editor and evaluation results">
+    </div>
+  </section>
+
+  <hr class="feature-divider">
+
+  <!-- ECL Reference -->
+  <section class="feature stacked">
+    <div class="feature-text">
+      <div class="label">ECL Reference</div>
+      <h2>Built-in ECL documentation at your fingertips</h2>
+      <p>Fifty searchable articles covering every ECL operator, refinement, filter, pattern, and history supplement —
+        with syntax explanations, examples, and tables. No need to leave the app or search the specification.
+        Stays visible alongside your work so you can look up syntax while writing expressions.</p>
+    </div>
+    <div class="feature-image">
+      <img src="screenshot-ecl-reference.png" alt="ECL Reference panel with searchable knowledge articles">
+    </div>
+  </section>
+
+  <hr class="feature-divider">
+
+  <!-- Visualise -->
+  <section class="feature stacked">
+    <div class="feature-text">
+      <div class="label">Visualise</div>
+      <h2>See concept relationships at a glance</h2>
+      <p>Generate SNOMED CT concept definition diagrams with one click. Export as SVG or PNG for presentations and
+        documentation. Follows the official SNOMED CT diagramming specification, but shows properties for other code
+        systems too (like LOINC!).</p>
+    </div>
+    <div class="feature-image">
+      <img src="screenshot-diagram.png" alt="SNOMED CT concept relationship diagram">
+    </div>
+  </section>
+
+  <!-- Hotkeys -->
+  <section class="hotkeys">
+    <h2>Six hotkeys. Zero friction.</h2>
+    <p class="subtitle">Works from any app — no switching windows, no browser tabs.</p>
+    <div class="hotkey-grid">
+      <div class="hotkey-card">
+        <div class="keys">⌃⌥L</div>
+        <div class="action">Lookup</div>
+      </div>
+      <div class="hotkey-card">
+        <div class="keys">⌃⌥S</div>
+        <div class="action">Search</div>
+      </div>
+      <div class="hotkey-card">
+        <div class="keys">⌃⌥R</div>
+        <div class="action">Replace</div>
+      </div>
+      <div class="hotkey-card">
+        <div class="keys">⌃⌥E</div>
+        <div class="action">ECL Format</div>
+      </div>
+      <div class="hotkey-card">
+        <div class="keys">⌃⌥V</div>
+        <div class="action">ECL Workbench</div>
+      </div>
+      <div class="hotkey-card">
+        <div class="keys">⌃⌥H</div>
+        <div class="action">Shrimp</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Code Systems -->
+  <section class="systems">
+    <h2>Not just SNOMED CT</h2>
+    <p class="subtitle">Works with any code system available on your FHIR terminology server.</p>
+    <div class="system-tags">
+      <span class="system-tag">SNOMED CT</span>
+      <span class="system-tag">LOINC</span>
+      <span class="system-tag">ICD-10</span>
+      <span class="system-tag">RxNorm</span>
+      <span class="system-tag">AMT</span>
+      <span class="system-tag">+ any FHIR CodeSystem</span>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta">
+    <h2>Get started</h2>
+    <p>Codeagogo is free and open source. Download it, set your hotkeys, and start looking up codes.</p>
+    <div class="btn-group">
+      <a href="https://github.com/aehrc/codeagogo/releases/latest" class="btn btn-primary">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+        </svg>
+        Install for macOS
+      </a>
+      <a href="https://github.com/aehrc/codeagogo-win/releases/latest" class="btn btn-outline">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M3 12V6.75l6-1.32v6.48L3 12zm6.13.51l.01 6.48-6.13-1.33V12.6l6.12-.09zm.61-6.6L22 4v8h-12.26V5.91zM22 12.5v7.5l-12.26-1.67V12.5H22z" />
+        </svg>
+        Install for Windows
+      </a>
+    </div>
+    <p style="margin-top: 1rem; font-size: 0.95rem; opacity: 0.85;">
+      macOS: <code style="background: rgba(255,255,255,0.15); padding: 0.2em 0.5em; border-radius: 4px;">brew tap aehrc/codeagogo https://github.com/aehrc/codeagogo && brew install --cask codeagogo</code>
+    </p>
+    <div class="cta-links">
+      <a href="https://lists.csiro.au/mailman3/lists/codeagogo.lists.csiro.au/">Join the Mailing List</a>
+      <a href="https://github.com/aehrc/codeagogo/issues">Request a Feature</a>
+      <a href="https://github.com/aehrc/codeagogo">View Source</a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <p>Built by <a href="https://aehrc.csiro.au">CSIRO Australian e-Health Research Centre</a>. Licensed under Apache
+      2.0.</p>
+    <p><a href="https://github.com/aehrc/codeagogo">macOS source</a> · <a
+        href="https://github.com/aehrc/codeagogo-win">Windows source</a></p>
+  </footer>
+
+</body>
+
+</html>

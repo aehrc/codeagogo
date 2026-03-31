@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Scheme
+   LastUpgradeVersion = "2620"
+   version = "1.7">
+   <BuildAction
+      parallelizeBuildables = "YES"
+      buildImplicitDependencies = "YES"
+      buildArchitectures = "Automatic">
+      <PreActions>
+         <ExecutionAction
+            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
+               title = "Bundle ecl-core for JavaScriptCore"
+               scriptText = "exec &gt; &quot;${PROJECT_DIR}/build-ecl-bundle.log&quot; 2&gt;&amp;1&#10;&#10;BUNDLE=&quot;${PROJECT_DIR}/Codeagogo/ecl-core-bundle.js&quot;&#10;SCRIPT=&quot;${PROJECT_DIR}/scripts/bundle-ecl-core.mjs&quot;&#10;SCRIPTS_DIR=&quot;${PROJECT_DIR}/scripts&quot;&#10;&#10;# Skip if bundle script doesn&apos;t exist&#10;if [ ! -f &quot;$SCRIPT&quot; ]; then&#10;  echo &quot;[ecl-bundle] Script not found, skipping&quot;&#10;  exit 0&#10;fi&#10;&#10;# Find node&#10;NODE=$(which node 2&gt;/dev/null || echo &quot;/opt/homebrew/bin/node&quot;)&#10;if [ ! -x &quot;$NODE&quot; ]; then&#10;  NODE=&quot;/usr/local/bin/node&quot;&#10;fi&#10;if [ ! -x &quot;$NODE&quot; ]; then&#10;  echo &quot;[ecl-bundle] Node.js not found, using existing bundle&quot;&#10;  exit 0&#10;fi&#10;&#10;# Install npm deps if missing&#10;if [ ! -d &quot;$SCRIPTS_DIR/node_modules/@aehrc/ecl-core&quot; ]; then&#10;  echo &quot;[ecl-bundle] Installing npm dependencies...&quot;&#10;  NPM=$(which npm 2&gt;/dev/null || echo &quot;/opt/homebrew/bin/npm&quot;)&#10;  if [ -x &quot;$NPM&quot; ]; then&#10;    cd &quot;$SCRIPTS_DIR&quot; &amp;&amp; &quot;$NPM&quot; install --ignore-scripts 2&gt;&amp;1&#10;  else&#10;    echo &quot;[ecl-bundle] npm not found, using existing bundle&quot;&#10;    exit 0&#10;  fi&#10;fi&#10;&#10;# Only rebuild if ecl-core package is newer than bundle&#10;ECL_CORE_PKG=&quot;$SCRIPTS_DIR/node_modules/@aehrc/ecl-core&quot;&#10;if [ -f &quot;$BUNDLE&quot; ] &amp;&amp; [ -d &quot;$ECL_CORE_PKG&quot; ]; then&#10;  NEWER=$(find &quot;$ECL_CORE_PKG&quot; -name &apos;*.js&apos; -newer &quot;$BUNDLE&quot; 2&gt;/dev/null | head -1)&#10;  if [ -z &quot;$NEWER&quot; ]; then&#10;    echo &quot;[ecl-bundle] Bundle is up to date&quot;&#10;    exit 0&#10;  fi&#10;  echo &quot;[ecl-bundle] ecl-core updated: $NEWER&quot;&#10;fi&#10;&#10;echo &quot;[ecl-bundle] Rebuilding ecl-core bundle...&quot;&#10;cd &quot;$PROJECT_DIR&quot; &amp;&amp; &quot;$NODE&quot; &quot;$SCRIPT&quot;&#10;echo &quot;[ecl-bundle] Done&quot;">
+               <EnvironmentBuildable>
+                  <BuildableReference
+                     BuildableIdentifier = "primary"
+                     BlueprintIdentifier = "1C305A792F16318300F58379"
+                     BuildableName = "Codeagogo.app"
+                     BlueprintName = "Codeagogo"
+                     ReferencedContainer = "container:Codeagogo.xcodeproj">
+                  </BuildableReference>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+      </PreActions>
+      <BuildActionEntries>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "1C305A792F16318300F58379"
+               BuildableName = "Codeagogo.app"
+               BlueprintName = "Codeagogo"
+               ReferencedContainer = "container:Codeagogo.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+      </BuildActionEntries>
+   </BuildAction>
+   <TestAction
+      buildConfiguration = "Debug"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      shouldUseLaunchSchemeArgsEnv = "YES">
+      <TestPlans>
+         <TestPlanReference
+            reference = "container:Codeagogo-Unit.xctestplan"
+            default = "YES">
+         </TestPlanReference>
+         <TestPlanReference
+            reference = "container:Codeagogo-Integration.xctestplan">
+         </TestPlanReference>
+         <TestPlanReference
+            reference = "container:Codeagogo-UI.xctestplan">
+         </TestPlanReference>
+      </TestPlans>
+   </TestAction>
+   <LaunchAction
+      buildConfiguration = "Release"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      launchStyle = "0"
+      useCustomWorkingDirectory = "NO"
+      ignoresPersistentStateOnLaunch = "NO"
+      debugDocumentVersioning = "YES"
+      debugServiceExtension = "internal"
+      allowLocationSimulation = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "1C305A792F16318300F58379"
+            BuildableName = "Codeagogo.app"
+            BlueprintName = "Codeagogo"
+            ReferencedContainer = "container:Codeagogo.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
+   </LaunchAction>
+   <ProfileAction
+      buildConfiguration = "Release"
+      shouldUseLaunchSchemeArgsEnv = "YES"
+      savedToolIdentifier = ""
+      useCustomWorkingDirectory = "NO"
+      debugDocumentVersioning = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "1C305A792F16318300F58379"
+            BuildableName = "Codeagogo.app"
+            BlueprintName = "Codeagogo"
+            ReferencedContainer = "container:Codeagogo.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
+   </ProfileAction>
+   <AnalyzeAction
+      buildConfiguration = "Debug">
+   </AnalyzeAction>
+   <ArchiveAction
+      buildConfiguration = "Release"
+      revealArchiveInOrganizer = "YES">
+   </ArchiveAction>
+</Scheme>

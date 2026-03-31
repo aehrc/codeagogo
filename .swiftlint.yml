@@ -1,0 +1,66 @@
+# SwiftLint configuration for Codeagogo
+# Enforces security and code quality rules
+
+# Only lint production and test source
+included:
+  - Codeagogo
+  - CodeagogoTests
+  - FHIROptions.swift
+
+excluded:
+  - build
+  - artifact
+  - .build
+
+# Security-focused opt-in rules
+opt_in_rules:
+  - force_unwrapping           # No force unwraps (!) — use guard/if-let/nil-coalescing
+  - force_try                  # No try! — handle errors properly
+  - force_cast                 # No as! — use as? with guard
+  - implicitly_unwrapped_optional  # No implicitly unwrapped optionals
+
+# Rules that don't suit this project
+disabled_rules:
+  - trailing_comma             # Trailing commas are fine
+  - todo                       # TODOs are allowed during development
+  - type_name                  # Some short type names are acceptable
+  - identifier_name            # Short names allowed in closures and math
+
+# Rule configuration
+line_length:
+  warning: 150
+  error: 250
+  ignores_comments: true
+  ignores_urls: true
+  ignores_interpolated_strings: true
+
+file_length:
+  warning: 500
+  error: 2500                  # OntoserverClient is large but well-organized
+
+type_body_length:
+  warning: 400
+  error: 1200                  # DiagramRenderer struct is large
+
+function_body_length:
+  warning: 60
+  error: 250                   # Some HTML/SVG generation functions are long
+
+cyclomatic_complexity:
+  warning: 15
+  error: 40                    # Lexer switch statements are inherently complex
+
+force_unwrapping:
+  severity: warning            # Warning — test files use force unwraps with known-good literals
+
+force_try:
+  severity: error
+
+force_cast:
+  severity: warning            # Warning — some CF type casts require as!
+
+file_header:
+  required_pattern: |
+    \/\/ Copyright 2026 Commonwealth Scientific and Industrial Research Organisation \(CSIRO\)
+
+reporter: "xcode"

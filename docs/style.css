@@ -1,0 +1,227 @@
+/* Codeagogo Landing Page */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --brand: #6366f1;
+  --brand-hover: #4f46e5;
+  --brand-light: #f0f4ff;
+  --text: #1d1d1f;
+  --text-secondary: #555;
+  --text-tertiary: #999;
+  --border: #e0e0e0;
+  --border-light: #eee;
+  --bg-alt: #f8f9fb;
+  --shadow: rgba(0,0,0,0.08);
+  --shadow-strong: rgba(0,0,0,0.12);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: var(--text);
+  background: #fff;
+  line-height: 1.5;
+}
+
+/* Hero */
+.hero {
+  text-align: center;
+  padding: 80px 24px 60px;
+  background: linear-gradient(180deg, var(--brand-light) 0%, #fff 100%);
+}
+.hero-icon {
+  width: 128px; height: 128px; border-radius: 28px;
+  margin: 0 auto 28px; overflow: hidden;
+  box-shadow:
+    0 0 0 6px rgba(255,255,255,0.7),
+    0 0 40px 8px rgba(99,102,241,0.2),
+    0 12px 40px rgba(0,0,0,0.15);
+}
+.hero-icon img { width: 100%; height: 100%; display: block; }
+.hero h1 {
+  font-size: 48px; font-weight: 700;
+  letter-spacing: -1px; margin-bottom: 16px;
+}
+.hero .tagline {
+  font-size: 20px; color: var(--text-secondary);
+  max-width: 640px; margin: 0 auto 12px; line-height: 1.5;
+}
+.hero .works-everywhere {
+  font-size: 17px; color: var(--brand);
+  font-weight: 600; margin-bottom: 32px;
+}
+
+/* Buttons */
+.btn-group {
+  display: flex; gap: 12px;
+  justify-content: center; flex-wrap: wrap;
+}
+.btn {
+  padding: 14px 28px; border-radius: 10px;
+  font-size: 16px; font-weight: 600;
+  text-decoration: none; border: none; cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+.btn-primary { background: var(--brand); color: white; }
+.btn-primary:hover { background: var(--brand-hover); }
+.btn-outline {
+  background: transparent; color: var(--brand);
+  border: 1px solid var(--brand);
+}
+.btn-outline:hover { background: var(--brand-light); }
+.btn-secondary {
+  background: white; color: #333;
+  border: 1px solid #ddd;
+}
+.btn-secondary:hover { border-color: #999; }
+
+/* Hero screenshot */
+.hero-screenshot {
+  max-width: 720px; margin: 48px auto 0;
+  border-radius: 12px; overflow: hidden;
+  box-shadow: 0 12px 48px var(--shadow-strong);
+  border: 1px solid #d0d5dd;
+}
+.hero-screenshot img {
+  width: 100%; height: auto; display: block;
+}
+.hero-screenshot .placeholder {
+  background: #e8ecf4; height: 380px;
+  display: flex; align-items: center;
+  justify-content: center; color: #888; font-size: 16px;
+}
+
+/* Feature sections */
+.feature {
+  display: flex; align-items: center; gap: 60px;
+  max-width: 1000px; margin: 0 auto; padding: 80px 24px;
+}
+.feature.reverse { flex-direction: row-reverse; }
+.feature-text { flex: 1; }
+.feature-text .label {
+  font-size: 13px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1.5px;
+  color: var(--brand); margin-bottom: 8px;
+}
+.feature-text h2 {
+  font-size: 32px; font-weight: 700;
+  margin-bottom: 12px; letter-spacing: -0.5px;
+}
+.feature-text p {
+  font-size: 17px; color: var(--text-secondary); line-height: 1.6;
+}
+.feature-image {
+  flex: 1; border-radius: 12px; overflow: hidden;
+  box-shadow: 0 8px 32px var(--shadow);
+  border: 1px solid #d0d5dd;
+}
+.feature-image img {
+  width: 100%; height: auto; display: block;
+}
+
+/* Full-width stacked layout for features with GIFs/large images */
+.feature.stacked {
+  flex-direction: column; gap: 24px; text-align: center;
+}
+.feature.stacked .feature-text { max-width: 640px; }
+.feature.stacked .feature-image {
+  width: 100%; max-width: 800px;
+}
+.feature-image .placeholder {
+  background: #e8ecf4; height: 320px;
+  display: flex; align-items: center;
+  justify-content: center; color: #888; font-size: 14px;
+}
+.feature-divider {
+  max-width: 900px; margin: 0 auto;
+  border: none; border-top: 1px solid var(--border-light);
+}
+
+/* Hotkeys strip */
+.hotkeys {
+  background: var(--bg-alt);
+  padding: 60px 24px; text-align: center;
+}
+.hotkeys h2 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+.hotkeys .subtitle {
+  color: var(--text-secondary);
+  font-size: 17px; margin-bottom: 32px;
+}
+.hotkey-grid {
+  display: flex; gap: 16px;
+  justify-content: center; flex-wrap: wrap;
+  max-width: 800px; margin: 0 auto;
+}
+.hotkey-card {
+  background: white; border: 1px solid var(--border);
+  border-radius: 10px; padding: 20px; width: 145px;
+  text-align: center;
+}
+.hotkey-card .keys {
+  font-family: 'SF Mono', Menlo, monospace; font-size: 12px;
+  background: #f0f0f0; padding: 4px 8px; border-radius: 6px;
+  display: inline-block; margin-bottom: 8px; color: #333;
+}
+.hotkey-card .action { font-size: 14px; font-weight: 600; }
+
+/* Code systems */
+.systems {
+  text-align: center; padding: 48px 24px;
+  max-width: 700px; margin: 0 auto;
+}
+.systems h2 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+.systems .subtitle {
+  color: var(--text-secondary);
+  font-size: 17px; margin-bottom: 24px;
+}
+.system-tags {
+  display: flex; gap: 10px;
+  justify-content: center; flex-wrap: wrap;
+}
+.system-tag {
+  background: var(--brand-light); color: #4338ca;
+  padding: 8px 16px; border-radius: 20px;
+  font-size: 14px; font-weight: 600;
+}
+
+/* Bottom CTA */
+.cta {
+  text-align: center; padding: 80px 24px;
+  background: linear-gradient(180deg, #fff 0%, var(--brand-light) 100%);
+}
+.cta h2 { font-size: 36px; font-weight: 700; margin-bottom: 12px; }
+.cta p {
+  font-size: 18px; color: var(--text-secondary);
+  max-width: 500px; margin: 0 auto 32px; line-height: 1.5;
+}
+.cta-links {
+  display: flex; gap: 24px;
+  justify-content: center; flex-wrap: wrap; margin-top: 16px;
+}
+.cta-links a {
+  color: var(--brand); text-decoration: none;
+  font-size: 15px; font-weight: 500;
+}
+.cta-links a:hover { text-decoration: underline; }
+
+/* Footer */
+footer {
+  text-align: center; padding: 32px 24px;
+  color: var(--text-tertiary); font-size: 13px;
+  border-top: 1px solid var(--border-light);
+}
+footer a { color: #666; text-decoration: none; }
+footer a:hover { text-decoration: underline; }
+footer p + p { margin-top: 8px; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .feature, .feature.reverse {
+    flex-direction: column; gap: 32px; padding: 48px 24px;
+  }
+  .hero h1 { font-size: 36px; }
+  .feature-text h2 { font-size: 26px; }
+  .hero .tagline { font-size: 18px; }
+  .hero .works-everywhere { font-size: 15px; }
+}
