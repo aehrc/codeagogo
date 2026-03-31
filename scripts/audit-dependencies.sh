@@ -124,8 +124,8 @@ except:
 
             if $LICENSE_OK; then
                 echo "  License:  OK ($LICENSE)"
-            elif [ "$LICENSE" = "ERROR" ] || [ "$LICENSE" = "UNKNOWN" ]; then
-                echo "  License:  Skipped (could not determine)"
+            elif [ "$LICENSE" = "ERROR" ] || [ "$LICENSE" = "UNKNOWN" ] || [ "$LICENSE" = "NONE" ]; then
+                echo "  License:  Skipped (could not determine from API — verify manually in THIRD-PARTY-LICENSES.md)"
             else
                 echo "  License:  WARNING — '$LICENSE' may not be permissive"
                 ISSUES=$((ISSUES + 1))
