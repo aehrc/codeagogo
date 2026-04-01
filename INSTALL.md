@@ -35,7 +35,13 @@ Download the latest `Codeagogo-macOS.zip` from the [Releases page](https://githu
 ---
 
 ### 3. Open the app (first run)
-When you first try to open the app, macOS may display a warning saying the app could not be verified.
+
+> **Why am I seeing a warning?**
+> macOS shows a "Codeagogo Not Opened" warning because the app is not yet signed with an Apple Developer ID certificate. This is a standard macOS Gatekeeper check — it does **not** mean the app is harmful. We're currently working with our organisation (CSIRO) to obtain an Apple Developer ID so this warning goes away in a future release. We're sorry for the inconvenience.
+>
+> If you installed via **Homebrew**, this step is handled automatically — you can skip ahead to [Accessibility permission](#accessibility-permission-required).
+
+When you first try to open the app, macOS will display a warning saying **"Codeagogo Not Opened — Apple could not verify Codeagogo is free of malware"**. Click **Done** (not "Move to Bin"), then follow one of these steps:
 
 #### Option A: Right-click open (recommended)
 1. In the **Applications** folder, right-click **Codeagogo.app**
@@ -43,13 +49,20 @@ When you first try to open the app, macOS may display a warning saying the app c
 3. Click **Open** again when prompted
 
 #### Option B: Open via System Settings
-1. Attempt to open the app normally (double-click)
+1. Attempt to open the app normally (double-click) — the warning will appear
 2. Open **System Settings → Privacy & Security**
 3. Scroll down to the security section
 4. Click **Open Anyway** next to Codeagogo
 5. Confirm **Open**
 
-You only need to do this once.
+#### Option C: Remove quarantine via Terminal
+If neither option above works, run this in Terminal:
+```bash
+xattr -cr /Applications/Codeagogo.app
+```
+Then open the app normally.
+
+You only need to do this once. After the first successful open, macOS will remember your choice.
 
 ---
 
