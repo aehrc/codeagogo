@@ -4,6 +4,7 @@ Codeagogo is a macOS menu bar utility for working with clinical terminology code
 
 > [!WARNING]
 > Because this app is not distributed via the Mac App Store, macOS will show a security warning the first time you open it. This is expected.
+> See [instructions below for first time use](#3-open-the-app-first-run) to work around this.
 
 ---
 
