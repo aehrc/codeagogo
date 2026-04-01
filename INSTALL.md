@@ -2,7 +2,8 @@
 
 Codeagogo is a macOS menu bar utility for working with clinical terminology codes. It provides global hotkeys to look up, search, and annotate SNOMED CT, LOINC, ICD-10, and other code systems from any application.
 
-Because this app is not distributed via the Mac App Store, macOS will show a security warning the first time you open it. This is expected.
+> [!WARNING]
+> Because this app is not distributed via the Mac App Store, macOS will show a security warning the first time you open it. This is expected.
 
 ---
 
