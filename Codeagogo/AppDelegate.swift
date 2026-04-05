@@ -53,6 +53,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The menu bar status item displaying the app icon.
     private var statusItem: NSStatusItem!
 
+    /// The status bar menu, stored for dynamic hotkey display updates.
+    private var statusMenu: NSMenu?
+
     /// The popover that displays lookup results.
     private lazy var popover = NSPopover()
 
@@ -97,6 +100,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Shared settings for the replace inactive hotkey configuration.
     private lazy var replaceInactiveHotKeySettings = ECLReplaceInactiveHotKeySettings.shared
+
+    /// Returns the hotkey description for the simplify hotkey (format hotkey + Shift).
+    private var simplifyHotkeyDescription: String {
+        let shiftBit = HotKeySettings.carbonModifiers(from: [.shift])
+        let combinedModifiers = eclFormatHotKeySettings.modifiersRaw | shiftBit
+        return KeyCodeFormatter.format(keyCode: eclFormatHotKeySettings.keyCode, modifiers: combinedModifiers)
+    }
 
     /// Bridge to ecl-core (TypeScript) running in JavaScriptCore for ECL operations.
     private lazy var eclBridge = ECLBridge()
@@ -348,6 +358,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Creates a menu item with an italicised hotkey shortcut right-aligned.
+    ///
+    /// - Parameters:
+    ///   - title: The menu item title
+    ///   - action: The selector to call when clicked
+    ///   - hotkeyDescription: The hotkey string (e.g., "⌃⌥E"), or nil for no shortcut display
+    /// - Returns: A configured NSMenuItem with attributed title
+    private func makeMenuItem(title: String, action: Selector, hotkeyDescription: String?) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+
+        guard let hotkey = hotkeyDescription, !hotkey.isEmpty else { return item }
+
+        let fullText = "\(title)\t\(hotkey)"
+
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.tabStops = [NSTextTab(textAlignment: .right, location: 210)]
+
+        let attributed = NSMutableAttributedString(
+            string: fullText,
+            attributes: [
+                .font: NSFont.menuFont(ofSize: 0),
+                .paragraphStyle: paragraphStyle,
+            ]
+        )
+
+        // Italicise the hotkey portion
+        let hotkeyRange = NSRange(location: fullText.count - hotkey.count, length: hotkey.count)
+        let italicFont = NSFontManager.shared.convert(NSFont.menuFont(ofSize: 0), toHaveTrait: .italicFontMask)
+        attributed.addAttribute(.font, value: italicFont, range: hotkeyRange)
+        attributed.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: hotkeyRange)
+
+        item.attributedTitle = attributed
+        return item
+    }
+
+    /// Updates all menu item hotkey displays when settings change.
+    private func rebuildMenuHotkeyDisplay() {
+        guard let menu = statusMenu else { return }
+        let items: [(String, String?)] = [
+            ("Lookup Selection", hotKeySettings.hotkeyDescription),
+            ("Search Concepts...", searchHotKeySettings.hotkeyDescription),
+            ("Replace Selection", replaceHotKeySettings.hotkeyDescription),
+            ("Format ECL", eclFormatHotKeySettings.hotkeyDescription),
+            ("Simplify ECL", simplifyHotkeyDescription),
+            ("Replace Inactive", replaceInactiveHotKeySettings.hotkeyDescription),
+            ("Evaluate ECL...", evaluateHotKeySettings.hotkeyDescription),
+            ("Open in Shrimp", shrimpHotKeySettings.hotkeyDescription),
+        ]
+
+        for (title, hotkey) in items {
+            guard let item = menu.items.first(where: {
+                $0.title == title || ($0.attributedTitle?.string.hasPrefix(title) ?? false)
+            }) else { continue }
+            let updated = makeMenuItem(title: title, action: item.action!, hotkeyDescription: hotkey)
+            item.attributedTitle = updated.attributedTitle
+        }
+    }
+
     /// Sets up the menu bar status item with icon and context menu.
     ///
     /// Creates a status item with a magnifying glass icon and a menu
@@ -363,15 +431,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Lookup Selection", action: #selector(lookupSelection), keyEquivalent: "l"))
-        menu.addItem(NSMenuItem(title: "Search Concepts...", action: #selector(showSearchPanel), keyEquivalent: "s"))
-        menu.addItem(NSMenuItem(title: "Replace Selection", action: #selector(replaceSelection), keyEquivalent: "r"))
+        menu.addItem(makeMenuItem(title: "Lookup Selection", action: #selector(lookupSelection),
+                                  hotkeyDescription: hotKeySettings.hotkeyDescription))
+        menu.addItem(makeMenuItem(title: "Search Concepts...", action: #selector(showSearchPanel),
+                                  hotkeyDescription: searchHotKeySettings.hotkeyDescription))
+        menu.addItem(makeMenuItem(title: "Replace Selection", action: #selector(replaceSelection),
+                                  hotkeyDescription: replaceHotKeySettings.hotkeyDescription))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Format ECL", action: #selector(formatECLSelection), keyEquivalent: "e"))
-        menu.addItem(NSMenuItem(title: "Evaluate ECL...", action: #selector(evaluateECLSelection), keyEquivalent: "v"))
-        menu.addItem(NSMenuItem(title: "ECL Reference...", action: #selector(showECLReference), keyEquivalent: ""))
+        menu.addItem(makeMenuItem(title: "Format ECL", action: #selector(formatECLSelection),
+                                  hotkeyDescription: eclFormatHotKeySettings.hotkeyDescription))
+        menu.addItem(makeMenuItem(title: "Simplify ECL", action: #selector(simplifyECLSelection),
+                                  hotkeyDescription: simplifyHotkeyDescription))
+        menu.addItem(makeMenuItem(title: "Replace Inactive", action: #selector(replaceInactiveConceptsInSelection),
+                                  hotkeyDescription: replaceInactiveHotKeySettings.hotkeyDescription))
+        menu.addItem(makeMenuItem(title: "Evaluate ECL...", action: #selector(evaluateECLSelection),
+                                  hotkeyDescription: evaluateHotKeySettings.hotkeyDescription))
+        menu.addItem(makeMenuItem(title: "ECL Reference...", action: #selector(showECLReference),
+                                  hotkeyDescription: nil))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Open in Shrimp", action: #selector(openInShrimpFromSelection), keyEquivalent: "b"))
+        menu.addItem(makeMenuItem(title: "Open in Shrimp", action: #selector(openInShrimpFromSelection),
+                                  hotkeyDescription: shrimpHotKeySettings.hotkeyDescription))
         menu.addItem(NSMenuItem.separator())
 
         let updateItem = NSMenuItem(title: "Check for Updates...", action: #selector(checkForUpdatesManually), keyEquivalent: "")
@@ -382,6 +461,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
         statusItem.menu = menu
+        statusMenu = menu
     }
 
     /// Configures the popover with the SwiftUI content view.
@@ -456,6 +536,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
                 self.hotKey?.update(keyCode: newKeyCode, modifiers: mods)
+                self.rebuildMenuHotkeyDisplay()
             }
             .store(in: &cancellables)
     }
@@ -489,6 +570,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
                 self.searchHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+                self.rebuildMenuHotkeyDisplay()
             }
             .store(in: &cancellables)
     }
@@ -523,6 +605,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
                 self.replaceHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+                self.rebuildMenuHotkeyDisplay()
             }
             .store(in: &cancellables)
     }
@@ -556,6 +639,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
                 self.eclFormatHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+                self.rebuildMenuHotkeyDisplay()
             }
             .store(in: &cancellables)
     }
@@ -589,6 +673,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
                 mods.insert(.shift)  // Always add Shift for simplify
                 self.eclSimplifyHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+                self.rebuildMenuHotkeyDisplay()
             }
             .store(in: &cancellables)
     }
@@ -618,6 +703,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
                 self.replaceInactiveHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+                self.rebuildMenuHotkeyDisplay()
             }
             .store(in: &cancellables)
     }
@@ -649,6 +735,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
                 self.evaluateHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+                self.rebuildMenuHotkeyDisplay()
             }
             .store(in: &cancellables)
     }
@@ -682,6 +769,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
                 self.shrimpHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+                self.rebuildMenuHotkeyDisplay()
             }
             .store(in: &cancellables)
     }
