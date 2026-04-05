@@ -92,6 +92,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The currently registered global hotkey handler for ECL simplification.
     private var eclSimplifyHotKey: GlobalHotKey?
 
+    /// The currently registered global hotkey handler for replacing inactive concepts.
+    private var replaceInactiveHotKey: GlobalHotKey?
+
+    /// Shared settings for the replace inactive hotkey configuration.
+    private lazy var replaceInactiveHotKeySettings = ECLReplaceInactiveHotKeySettings.shared
+
     /// Bridge to ecl-core (TypeScript) running in JavaScriptCore for ECL operations.
     private lazy var eclBridge = ECLBridge()
 
@@ -184,6 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupReplaceHotKey()
         setupECLFormatHotKey()
         setupECLSimplifyHotKey()
+        setupReplaceInactiveHotKey()
         setupEvaluateHotKey()
         setupShrimpHotKey()
         setupUpdateChecker()
@@ -586,6 +593,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
     }
 
+    /// Registers the Replace Inactive Concepts hotkey and sets up observation for settings changes.
+    ///
+    /// Uses id=8 to distinguish from other hotkeys.
+    private func setupReplaceInactiveHotKey() {
+        replaceInactiveHotKey = GlobalHotKey(
+            keyCode: ECLReplaceInactiveHotKeySettings.currentKeyCode,
+            modifiers: ECLReplaceInactiveHotKeySettings.currentModifiers,
+            id: 8
+        ) { [weak self] in
+            self?.replaceInactiveConceptsInSelection()
+        }
+        replaceInactiveHotKey?.start()
+
+        Publishers.CombineLatest(replaceInactiveHotKeySettings.$keyCode, replaceInactiveHotKeySettings.$modifiersRaw)
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newKeyCode, newModifiersRaw in
+                guard let self else { return }
+                self.replaceInactiveHotKeySettings.save()
+                var mods: NSEvent.ModifierFlags = []
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.control])) != 0 { mods.insert(.control) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.option])) != 0 { mods.insert(.option) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
+                self.replaceInactiveHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+            }
+            .store(in: &cancellables)
+    }
+
     /// Registers the ECL evaluation hotkey and sets up observation for settings changes.
     ///
     /// The evaluate hotkey reads the current selection, evaluates it as an ECL
@@ -918,6 +954,158 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 AppLog.error(AppLog.ui, "ECL simplify failed: \(error)")
             }
         }
+    }
+
+    /// Replaces inactive SNOMED CT concepts in the selected ECL with their active replacements.
+    ///
+    /// Extracts concept IDs from the selection, checks which are inactive via batch lookup,
+    /// looks up historical associations for each inactive concept, and replaces them with
+    /// active equivalents. Priority: replaced-by > same-as > possibly-equivalent-to > alternative.
+    @objc private func replaceInactiveConceptsInSelection() {
+        Task { @MainActor in
+            do {
+                let reader = SystemSelectionReader()
+
+                // 1. Read selection
+                let text = try reader.readSelectionByCopying()
+
+                guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    NSSound.beep()
+                    AppLog.warning(AppLog.ui, "Replace inactive failed: empty selection")
+                    return
+                }
+
+                // 2. Extract concept IDs via ecl-core
+                let concepts = eclBridge.extractConceptIds(text)
+                guard !concepts.isEmpty else {
+                    NSSound.beep()
+                    progressHUD.showWarning(message: "No concepts found")
+                    AppLog.warning(AppLog.ui, "Replace inactive: no concepts in selection")
+                    return
+                }
+
+                progressHUD.show(message: "Checking concepts...")
+
+                // 3. Batch lookup to find inactive ones
+                let conceptIds = concepts.map(\.id)
+                let batchResult = try await ontoserverClient.batchLookup(conceptIds: conceptIds)
+
+                let inactiveIds = conceptIds.filter { batchResult.isActive(for: $0) == false }
+
+                guard !inactiveIds.isEmpty else {
+                    progressHUD.hide()
+                    progressHUD.showWarning(message: "No inactive concepts")
+                    AppLog.info(AppLog.ui, "Replace inactive: all concepts are active")
+                    return
+                }
+
+                progressHUD.show(message: "Looking up replacements...")
+
+                // 4. Get historical associations for each inactive concept in parallel
+                var associationsByCode: [String: [OntoserverClient.HistoricalAssociation]] = [:]
+                try await withThrowingTaskGroup(of: (String, [OntoserverClient.HistoricalAssociation]).self) { group in
+                    for conceptId in inactiveIds {
+                        group.addTask {
+                            let assocs = try await self.ontoserverClient.getHistoricalAssociations(conceptId: conceptId)
+                            return (conceptId, assocs)
+                        }
+                    }
+                    for try await (conceptId, assocs) in group {
+                        associationsByCode[conceptId] = assocs
+                    }
+                }
+
+                // 5. Build replacements using priority order
+                let priorityOrder: [OntoserverClient.HistoricalAssociationType] = [
+                    .replacedBy, .sameAs, .possiblyEquivalentTo, .alternative,
+                ]
+                var replacementsByCode: [String: String] = [:]
+                var noReplacementIds: [String] = []
+
+                for conceptId in inactiveIds {
+                    let assocs = associationsByCode[conceptId] ?? []
+                    var found = false
+                    for type in priorityOrder {
+                        if let assoc = assocs.first(where: { $0.type == type }) {
+                            replacementsByCode[conceptId] = buildReplacementText(from: assoc)
+                            found = true
+                            break
+                        }
+                    }
+                    if !found {
+                        noReplacementIds.append(conceptId)
+                    }
+                }
+
+                guard !replacementsByCode.isEmpty else {
+                    progressHUD.hide()
+                    progressHUD.showWarning(message: "No replacements available")
+                    AppLog.info(AppLog.ui, "Replace inactive: no historical associations found")
+                    return
+                }
+
+                // 6. Replace in text — use regex to match concept ID + optional display term
+                var result = text
+                for (conceptId, replacement) in replacementsByCode {
+                    let pattern = NSRegularExpression.escapedPattern(for: conceptId) + "(\\s*\\|[^|]*\\|)?"
+                    if let regex = try? NSRegularExpression(pattern: pattern) {
+                        let range = NSRange(result.startIndex..., in: result)
+                        result = regex.stringByReplacingMatches(
+                            in: result,
+                            options: [],
+                            range: range,
+                            withTemplate: NSRegularExpression.escapedTemplate(for: replacement)
+                        )
+                    }
+                }
+
+                // 7. Put result on clipboard and paste
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.setString(result, forType: .string)
+
+                try await Task.sleep(nanoseconds: 50_000_000)
+
+                if !reader.pasteAndSelect(textLength: result.utf16.count) {
+                    throw LookupError.accessibilityPermissionLikelyMissing
+                }
+
+                progressHUD.hide()
+
+                let count = replacementsByCode.count
+                var message = "Replaced \(count) inactive concept\(count == 1 ? "" : "s")"
+                if !noReplacementIds.isEmpty {
+                    message += " (\(noReplacementIds.count) had no replacement)"
+                }
+                AppLog.info(AppLog.ui, message)
+
+            } catch {
+                progressHUD.hide()
+                NSSound.beep()
+                AppLog.error(AppLog.ui, "Replace inactive failed: \(error)")
+            }
+        }
+    }
+
+    /// Builds replacement ECL text from a historical association.
+    ///
+    /// - Single target: `code |display|`
+    /// - Multiple targets: `(code1 |display1| OR code2 |display2|)`
+    private func buildReplacementText(from association: OntoserverClient.HistoricalAssociation) -> String {
+        let targets = association.targets
+        guard !targets.isEmpty else { return "" }
+
+        if targets.count == 1 {
+            let target = targets[0]
+            let display = target.display.isEmpty ? "" : " |\(target.display)|"
+            return target.code + display
+        }
+
+        let parts = targets.map { target in
+            let display = target.display.isEmpty ? "" : " |\(target.display)|"
+            return target.code + display
+        }
+        return "(" + parts.joined(separator: " OR ") + ")"
     }
 
     /// Opens the selected concept in the Shrimp terminology browser.
