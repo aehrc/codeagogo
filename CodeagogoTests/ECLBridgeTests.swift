@@ -412,4 +412,54 @@ final class ECLBridgeTests: XCTestCase {
         XCTAssertNotNil(result)
         XCTAssertTrue(result?.contains("(") ?? false)
     }
+
+    // MARK: - Canonical Comparison Tests
+
+    func testCanonicalise_sortsOperands() {
+        let result = bridge.canonicalise("<< 73211009 OR << 404684003")
+        XCTAssertNotNil(result)
+        guard let canonical = result else { return }
+        let idx404 = canonical.range(of: "404684003")
+        let idx732 = canonical.range(of: "73211009")
+        XCTAssertNotNil(idx404)
+        XCTAssertNotNil(idx732)
+        if let idx404, let idx732 {
+            XCTAssertTrue(idx404.lowerBound < idx732.lowerBound, "404684003 should come before 73211009 in canonical form")
+        }
+    }
+
+    func testCanonicalise_stripsDisplayTerms() {
+        let result = bridge.canonicalise("404684003 |Clinical finding|")
+        XCTAssertNotNil(result)
+        XCTAssertFalse(result?.contains("Clinical finding") ?? true)
+        XCTAssertTrue(result?.contains("404684003") ?? false)
+    }
+
+    func testCanonicalise_invalidECL_returnsNil() {
+        let result = bridge.canonicalise("AND OR NOT <<<>>>")
+        XCTAssertNil(result)
+    }
+
+    func testCompareExpressions_identical() {
+        let result = bridge.compareExpressions("<< 404684003", "<< 404684003")
+        XCTAssertEqual(result, "identical")
+    }
+
+    func testCompareExpressions_structurallyEquivalent() {
+        let result = bridge.compareExpressions(
+            "<< 73211009 OR << 404684003",
+            "<< 404684003 OR << 73211009"
+        )
+        XCTAssertEqual(result, "structurally_equivalent")
+    }
+
+    func testCompareExpressions_different() {
+        let result = bridge.compareExpressions("<< 404684003", "<< 73211009")
+        XCTAssertEqual(result, "different")
+    }
+
+    func testCompareExpressions_invalidECL_returnsNil() {
+        let result = bridge.compareExpressions("<<<>>>", "<< 404684003")
+        XCTAssertNil(result)
+    }
 }

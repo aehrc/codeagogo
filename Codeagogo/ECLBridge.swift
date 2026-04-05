@@ -382,6 +382,56 @@ final class ECLBridge {
         }
     }
 
+    // MARK: - Canonical Comparison
+
+    /// Returns the canonical form of an ECL expression.
+    ///
+    /// Canonical form strips display terms, sorts AND/OR operands and refinement
+    /// attributes by SCTID, flattens same-operator compounds, and removes
+    /// redundant parentheses. Useful for structural equivalence checking
+    /// without FHIR calls.
+    ///
+    /// - Parameter ecl: The ECL expression to canonicalise
+    /// - Returns: The canonical string, or nil if the expression is invalid
+    func canonicalise(_ ecl: String) -> String? {
+        let escaped = escapeForJS(ecl)
+        let result = context.evaluateScript("""
+            (function() {
+                try {
+                    return ECLCore.canonicalise('\(escaped)');
+                } catch(e) {
+                    return null;
+                }
+            })()
+        """)
+        guard let result, !result.isNull, !result.isUndefined else { return nil }
+        return result.toString()
+    }
+
+    /// Compares two ECL expressions for structural equivalence.
+    ///
+    /// - Parameters:
+    ///   - a: The first ECL expression
+    ///   - b: The second ECL expression
+    /// - Returns: `"identical"` if the trimmed strings match,
+    ///   `"structurally_equivalent"` if they canonicalise to the same form,
+    ///   `"different"` otherwise, or nil if either expression is invalid
+    func compareExpressions(_ a: String, _ b: String) -> String? {
+        let escapedA = escapeForJS(a)
+        let escapedB = escapeForJS(b)
+        let result = context.evaluateScript("""
+            (function() {
+                try {
+                    return ECLCore.compareExpressions('\(escapedA)', '\(escapedB)');
+                } catch(e) {
+                    return null;
+                }
+            })()
+        """)
+        guard let result, !result.isNull, !result.isUndefined else { return nil }
+        return result.toString()
+    }
+
     // MARK: - Helpers
 
     /// Escapes a string for safe inclusion in a JS single-quoted string literal.
