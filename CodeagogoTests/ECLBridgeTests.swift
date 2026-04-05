@@ -370,4 +370,46 @@ final class ECLBridgeTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(docs.count, 10,
                                     "Should have at least 10 operator docs (got \(docs.count))")
     }
+
+    // MARK: - Remove Redundant Parentheses Tests
+
+    func testRemoveRedundantParentheses_unwrapsSingleConcept() {
+        var options = ECLBridge.FormattingOptions()
+        options.removeRedundantParentheses = true
+        let result = bridge.formatECL("(404684003)", options: options)
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.trimmingCharacters(in: .whitespacesAndNewlines), "404684003")
+    }
+
+    func testRemoveRedundantParentheses_flattensSameOperator() {
+        var options = ECLBridge.FormattingOptions()
+        options.removeRedundantParentheses = true
+        let result = bridge.formatECL("(<< 404684003 AND << 73211009) AND << 38341003", options: options)
+        XCTAssertNotNil(result)
+        let trimmed = result!.trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertFalse(trimmed.hasPrefix("("))
+    }
+
+    func testRemoveRedundantParentheses_preservesRequiredParens() {
+        var options = ECLBridge.FormattingOptions()
+        options.removeRedundantParentheses = true
+        let result = bridge.formatECL("(<< 404684003 OR << 73211009) AND << 38341003", options: options)
+        XCTAssertNotNil(result)
+        let trimmed = result!.trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertTrue(trimmed.contains("("))
+    }
+
+    func testRemoveRedundantParentheses_nestedRedundant() {
+        var options = ECLBridge.FormattingOptions()
+        options.removeRedundantParentheses = true
+        let result = bridge.formatECL("((404684003))", options: options)
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.trimmingCharacters(in: .whitespacesAndNewlines), "404684003")
+    }
+
+    func testRemoveRedundantParentheses_defaultFalse() {
+        let result = bridge.formatECL("(404684003)")
+        XCTAssertNotNil(result)
+        XCTAssertTrue(result?.contains("(") ?? false)
+    }
 }

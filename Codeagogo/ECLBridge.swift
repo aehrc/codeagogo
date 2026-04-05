@@ -46,6 +46,7 @@ final class ECLBridge {
         var breakOnOperators: Bool = false
         var breakOnRefinementComma: Bool = false
         var breakAfterColon: Bool = false
+        var removeRedundantParentheses: Bool = false
 
         static let `default` = FormattingOptions()
 
@@ -61,7 +62,8 @@ final class ECLBridge {
                 wrapComments: \(wrapComments),
                 breakOnOperators: \(breakOnOperators),
                 breakOnRefinementComma: \(breakOnRefinementComma),
-                breakAfterColon: \(breakAfterColon)
+                breakAfterColon: \(breakAfterColon),
+                removeRedundantParentheses: \(removeRedundantParentheses)
             }
             """
         }
