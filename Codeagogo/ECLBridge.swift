@@ -296,6 +296,7 @@ final class ECLBridge {
                             breakOnOperators: false,
                             breakOnRefinementComma: false,
                             breakAfterColon: false,
+                            removeRedundantParentheses: false,
                         });
                     }
                     return formatted;
