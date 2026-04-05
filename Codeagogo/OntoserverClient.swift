@@ -721,6 +721,140 @@ final class OntoserverClient: ConceptSearching, @unchecked Sendable {
         return BatchLookupResult(ptByCode: ptByCode, fsnByCode: fsnByCode, activeByCode: activeByCode)
     }
 
+    // MARK: - Historical Associations
+
+    /// The type of historical association between an inactive concept and its replacement(s).
+    enum HistoricalAssociationType: String, Sendable {
+        case sameAs = "same-as"
+        case replacedBy = "replaced-by"
+        case possiblyEquivalentTo = "possibly-equivalent-to"
+        case alternative = "alternative"
+    }
+
+    /// A historical association linking an inactive concept to one or more replacement targets.
+    struct HistoricalAssociation: Sendable {
+        let type: HistoricalAssociationType
+        let refsetId: String
+        let targets: [(code: String, display: String)]
+    }
+
+    /// SNOMED CT association reference sets, ordered by specificity.
+    private static let associationRefsets: [(refsetId: String, type: HistoricalAssociationType)] = [
+        ("900000000000527005", .sameAs),
+        ("900000000000526001", .replacedBy),
+        ("900000000000523009", .possiblyEquivalentTo),
+        ("900000000000530003", .alternative),
+    ]
+
+    // MARK: Historical Association Decodable Types
+
+    /// Response from `ConceptMap/$translate`.
+    private struct TranslateResponse: Decodable {
+        let resourceType: String?
+        let parameter: [TranslateParameter]?
+    }
+
+    /// A parameter in a `$translate` response (e.g., `result`, `match`).
+    private struct TranslateParameter: Decodable {
+        let name: String
+        let valueBoolean: Bool?
+        let valueString: String?
+        let part: [TranslateParameterPart]?
+    }
+
+    /// A part within a `$translate` match parameter.
+    private struct TranslateParameterPart: Decodable {
+        let name: String
+        let valueCode: String?
+        let valueString: String?
+        let valueCoding: TranslateCoding?
+    }
+
+    /// A coding within a `$translate` match part.
+    private struct TranslateCoding: Decodable {
+        let system: String?
+        let code: String?
+        let display: String?
+    }
+
+    /// Queries all SNOMED CT historical association reference sets for an inactive concept.
+    ///
+    /// Sends parallel `ConceptMap/$translate` requests for each of the four association
+    /// refsets (SAME AS, REPLACED BY, POSSIBLY EQUIVALENT TO, ALTERNATIVE) and returns
+    /// any associations that have targets, ordered by specificity.
+    ///
+    /// - Parameter conceptId: The SNOMED CT concept identifier to look up
+    /// - Returns: Array of `HistoricalAssociation` ordered by specificity (sameAs first)
+    /// - Throws: Network or parsing errors
+    func getHistoricalAssociations(conceptId: String) async throws -> [HistoricalAssociation] {
+        AppLog.info(AppLog.network, "getHistoricalAssociations conceptId=\(conceptId)")
+
+        let results = try await withThrowingTaskGroup(
+            of: HistoricalAssociation?.self,
+            returning: [HistoricalAssociation?].self
+        ) { group in
+            for (refsetId, type) in Self.associationRefsets {
+                group.addTask {
+                    let targets = try await self.translateAssociation(conceptId: conceptId, refsetId: refsetId)
+                    guard !targets.isEmpty else { return nil }
+                    return HistoricalAssociation(type: type, refsetId: refsetId, targets: targets)
+                }
+            }
+            var collected: [HistoricalAssociation?] = []
+            for try await result in group {
+                collected.append(result)
+            }
+            return collected
+        }
+
+        let typeOrder: [HistoricalAssociationType] = [.sameAs, .replacedBy, .possiblyEquivalentTo, .alternative]
+        return typeOrder.compactMap { type in
+            results.compactMap { $0 }.first { $0.type == type }
+        }
+    }
+
+    /// Queries a single `ConceptMap/$translate` for one association refset.
+    ///
+    /// - Parameters:
+    ///   - conceptId: The SNOMED CT concept identifier
+    ///   - refsetId: The association reference set identifier
+    /// - Returns: Array of target concept (code, display) tuples
+    private func translateAssociation(conceptId: String, refsetId: String) async throws -> [(code: String, display: String)] {
+        let snomedSystem = "http://snomed.info/sct"
+        let cmUrl = "\(snomedSystem)?fhir_cm=\(refsetId)"
+        let targetUrl = "\(snomedSystem)?fhir_vs"
+
+        var components = URLComponents(url: baseURL.appendingPathComponent("ConceptMap/$translate"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "code", value: conceptId),
+            URLQueryItem(name: "system", value: snomedSystem),
+            URLQueryItem(name: "target", value: targetUrl),
+            URLQueryItem(name: "url", value: cmUrl),
+        ]
+
+        guard let url = components.url else { return [] }
+
+        let response: TranslateResponse = try await getJSON(url)
+
+        guard response.parameter?.contains(where: { $0.name == "result" && $0.valueBoolean == true }) == true else {
+            return []
+        }
+
+        var targets: [(code: String, display: String)] = []
+        for param in response.parameter ?? [] {
+            guard param.name == "match" else { continue }
+            for part in param.part ?? [] {
+                guard part.name == "concept", let coding = part.valueCoding else { continue }
+                if let code = coding.code {
+                    targets.append((code: code, display: coding.display ?? ""))
+                }
+            }
+        }
+
+        AppLog.info(AppLog.network, "translateAssociation conceptId=\(conceptId) refsetId=\(refsetId) targets=\(targets.count)")
+        return targets
+    }
+
     // MARK: - Search (ValueSet/$expand)
 
     /// Searches for SNOMED CT concepts matching a text filter.
