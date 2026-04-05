@@ -89,6 +89,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The currently registered global hotkey handler for ECL formatting.
     private var eclFormatHotKey: GlobalHotKey?
 
+    /// The currently registered global hotkey handler for ECL simplification.
+    private var eclSimplifyHotKey: GlobalHotKey?
+
     /// Bridge to ecl-core (TypeScript) running in JavaScriptCore for ECL operations.
     private lazy var eclBridge = ECLBridge()
 
@@ -180,6 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupSearchHotKey()
         setupReplaceHotKey()
         setupECLFormatHotKey()
+        setupECLSimplifyHotKey()
         setupEvaluateHotKey()
         setupShrimpHotKey()
         setupUpdateChecker()
@@ -549,6 +553,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
     }
 
+    /// Registers the ECL simplify hotkey (Shift + ECL Format hotkey).
+    ///
+    /// Derived from the ECL format hotkey by adding Shift. Not independently
+    /// configurable — updates automatically when the format hotkey changes.
+    /// Uses id=7 to distinguish from other hotkeys.
+    private func setupECLSimplifyHotKey() {
+        let formatModifiers = ECLFormatHotKeySettings.currentModifiers
+        eclSimplifyHotKey = GlobalHotKey(
+            keyCode: ECLFormatHotKeySettings.currentKeyCode,
+            modifiers: formatModifiers.union(.shift),
+            id: 7
+        ) { [weak self] in
+            self?.simplifyECLSelection()
+        }
+        eclSimplifyHotKey?.start()
+
+        // Update when format hotkey settings change (reuses same Combine pipeline)
+        Publishers.CombineLatest(eclFormatHotKeySettings.$keyCode, eclFormatHotKeySettings.$modifiersRaw)
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newKeyCode, newModifiersRaw in
+                guard let self else { return }
+                var mods: NSEvent.ModifierFlags = []
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.control])) != 0 { mods.insert(.control) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.option])) != 0 { mods.insert(.option) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
+                mods.insert(.shift)  // Always add Shift for simplify
+                self.eclSimplifyHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+            }
+            .store(in: &cancellables)
+    }
+
     /// Registers the ECL evaluation hotkey and sets up observation for settings changes.
     ///
     /// The evaluate hotkey reads the current selection, evaluates it as an ECL
@@ -793,6 +830,92 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } catch {
                 NSSound.beep()
                 AppLog.error(AppLog.ui, "ECL format failed: \(error)")
+            }
+        }
+    }
+
+    /// Simplifies the selected ECL expression by removing redundant parentheses and formatting.
+    ///
+    /// This is a one-way operation (not a toggle). Reads the selection, formats with
+    /// `removeRedundantParentheses: true`, and replaces the selection with the simplified result.
+    @objc private func simplifyECLSelection() {
+        Task { @MainActor in
+            do {
+                let reader = SystemSelectionReader()
+
+                // 1. Read selection
+                let text = try reader.readSelectionByCopying()
+
+                guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    NSSound.beep()
+                    AppLog.warning(AppLog.ui, "ECL simplify failed: empty selection")
+                    return
+                }
+
+                // 2. Parse first to check for errors
+                let parseResult = eclBridge.parseECL(text)
+                if !parseResult.errors.isEmpty {
+                    let error = parseResult.errors[0]
+                    let location = error.column > 0 ? "Col \(error.column): " : ""
+                    progressHUD.showError(message: "\(location)\(error.message)")
+                    NSSound.beep()
+                    AppLog.warning(AppLog.ui, "ECL simplify failed: \(error.message) (line \(error.line), col \(error.column))")
+                    return
+                }
+
+                // 3. Capture any ambiguous-precedence warnings
+                let precedenceWarnings = parseResult.warnings
+                if !precedenceWarnings.isEmpty {
+                    AppLog.info(AppLog.ui, "ECL parse warnings: \(precedenceWarnings)")
+                }
+
+                // 4. Format with removeRedundantParentheses enabled
+                var options = ECLBridge.FormattingOptions()
+                options.removeRedundantParentheses = true
+                guard let simplified = eclBridge.formatECL(text, options: options) else {
+                    NSSound.beep()
+                    AppLog.warning(AppLog.ui, "ECL simplify failed: could not format")
+                    return
+                }
+
+                // 5. Check if anything changed
+                let inputNorm = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let outputNorm = simplified.trimmingCharacters(in: .whitespacesAndNewlines)
+                if inputNorm == outputNorm {
+                    progressHUD.showWarning(message: "No simplification needed")
+                    AppLog.info(AppLog.ui, "ECL simplify: no changes needed")
+                    return
+                }
+
+                // 6. Put simplified text on clipboard
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.setString(simplified, forType: .string)
+
+                // 7. Small delay to ensure clipboard is ready
+                try await Task.sleep(nanoseconds: 50_000_000)
+
+                // 8. Paste and select the inserted text
+                if !reader.pasteAndSelect(textLength: simplified.utf16.count) {
+                    throw LookupError.accessibilityPermissionLikelyMissing
+                }
+
+                AppLog.info(AppLog.ui, "Simplified ECL expression")
+
+                // 9. Show ambiguous-precedence warning after simplify completes
+                if !precedenceWarnings.isEmpty {
+                    progressHUD.showError(
+                        message: "Mixed AND/OR \u{2014} consider adding parentheses",
+                        duration: 4
+                    )
+                }
+
+                // 10. Fire-and-forget: validate referenced concepts in the background
+                validateConceptsInBackground(text)
+
+            } catch {
+                NSSound.beep()
+                AppLog.error(AppLog.ui, "ECL simplify failed: \(error)")
             }
         }
     }
