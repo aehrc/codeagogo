@@ -462,4 +462,60 @@ final class ECLBridgeTests: XCTestCase {
         let result = bridge.compareExpressions("<<<>>>", "<< 404684003")
         XCTAssertNil(result)
     }
+
+    // MARK: - Replacement Text Builder Tests
+
+    /// Tests building replacement text for a single target with display term.
+    func testBuildReplacementText_singleTarget_withDisplay() {
+        let result = Self.buildReplacementText(targets: [("999999013", "Replacement concept")])
+        XCTAssertEqual(result, "999999013 |Replacement concept|")
+    }
+
+    /// Tests building replacement text for a single target without display term.
+    func testBuildReplacementText_singleTarget_noDisplay() {
+        let result = Self.buildReplacementText(targets: [("999999013", "")])
+        XCTAssertEqual(result, "999999013")
+    }
+
+    /// Tests building replacement text for multiple targets (OR disjunction).
+    func testBuildReplacementText_multipleTargets() {
+        let result = Self.buildReplacementText(targets: [
+            ("111111111", "Target A"),
+            ("222222222", "Target B"),
+        ])
+        XCTAssertEqual(result, "(111111111 |Target A| OR 222222222 |Target B|)")
+    }
+
+    /// Tests building replacement text for no targets (empty string).
+    func testBuildReplacementText_noTargets() {
+        let result = Self.buildReplacementText(targets: [])
+        XCTAssertEqual(result, "")
+    }
+
+    /// Tests building replacement text for three targets.
+    func testBuildReplacementText_threeTargets() {
+        let result = Self.buildReplacementText(targets: [
+            ("111111111", "A"),
+            ("222222222", "B"),
+            ("333333333", "C"),
+        ])
+        XCTAssertEqual(result, "(111111111 |A| OR 222222222 |B| OR 333333333 |C|)")
+    }
+
+    /// Pure replacement builder — mirrors AppDelegate.buildReplacementText logic.
+    private static func buildReplacementText(targets: [(code: String, display: String)]) -> String {
+        guard !targets.isEmpty else { return "" }
+
+        if targets.count == 1 {
+            let target = targets[0]
+            let display = target.display.isEmpty ? "" : " |\(target.display)|"
+            return target.code + display
+        }
+
+        let parts = targets.map { target in
+            let display = target.display.isEmpty ? "" : " |\(target.display)|"
+            return target.code + display
+        }
+        return "(" + parts.joined(separator: " OR ") + ")"
+    }
 }
