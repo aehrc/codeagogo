@@ -381,21 +381,19 @@ final class ECLBridgeTests: XCTestCase {
         XCTAssertEqual(result?.trimmingCharacters(in: .whitespacesAndNewlines), "404684003")
     }
 
-    func testRemoveRedundantParentheses_flattensSameOperator() {
+    func testRemoveRedundantParentheses_flattensSameOperator() throws {
         var options = ECLBridge.FormattingOptions()
         options.removeRedundantParentheses = true
         let result = bridge.formatECL("(<< 404684003 AND << 73211009) AND << 38341003", options: options)
-        XCTAssertNotNil(result)
-        let trimmed = result!.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = try XCTUnwrap(result).trimmingCharacters(in: .whitespacesAndNewlines)
         XCTAssertFalse(trimmed.hasPrefix("("))
     }
 
-    func testRemoveRedundantParentheses_preservesRequiredParens() {
+    func testRemoveRedundantParentheses_preservesRequiredParens() throws {
         var options = ECLBridge.FormattingOptions()
         options.removeRedundantParentheses = true
         let result = bridge.formatECL("(<< 404684003 OR << 73211009) AND << 38341003", options: options)
-        XCTAssertNotNil(result)
-        let trimmed = result!.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = try XCTUnwrap(result).trimmingCharacters(in: .whitespacesAndNewlines)
         XCTAssertTrue(trimmed.contains("("))
     }
 
@@ -581,19 +579,16 @@ final class ECLBridgeTests: XCTestCase {
         XCTAssertEqual(result, "<< 999999013 |New|: 363698007 = << 39057004")
     }
 
-    /// Tests that a concept ID that is a prefix of another is handled correctly.
+    /// Tests that a concept ID that is a prefix of another is not matched.
     func testReplaceInactive_conceptIdNotSubstringMatched() {
-        // 123456789 should not match inside 12345678901
+        // 123456789 should not match inside 12345678901 thanks to digit boundary assertions
         let result = Self.replaceConceptInText(
             "<< 12345678901",
             conceptId: "123456789",
             replacement: "REPLACED"
         )
-        // The regex matches "123456789" which IS a substring at the start.
-        // This is a known limitation — concept IDs in ECL are space/operator delimited.
-        // For now, just verify no crash. The real protection is that extractConceptIds
-        // returns full IDs from the parser, not substrings.
-        XCTAssertNotNil(result)
+        // With (?<![0-9]) and (?![0-9]) boundaries, the shorter ID should NOT match
+        XCTAssertEqual(result, "<< 12345678901")
     }
 
     /// Tests replacing concept with display term that has spaces around pipes.
@@ -668,7 +663,7 @@ final class ECLBridgeTests: XCTestCase {
 
     /// Mirrors the regex replacement logic from AppDelegate.replaceInactiveConceptsInSelection.
     private static func replaceConceptInText(_ text: String, conceptId: String, replacement: String) -> String {
-        let pattern = NSRegularExpression.escapedPattern(for: conceptId) + "(\\s*\\|[^|]*\\|)?"
+        let pattern = "(?<![0-9])" + NSRegularExpression.escapedPattern(for: conceptId) + "(?![0-9])" + "(\\s*\\|[^|]*\\|)?"
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
         let range = NSRange(text.startIndex..., in: text)
         let escaped = NSRegularExpression.escapedTemplate(for: replacement)

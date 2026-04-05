@@ -410,8 +410,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for (title, hotkey) in items {
             guard let item = menu.items.first(where: {
                 $0.title == title || ($0.attributedTitle?.string.hasPrefix(title) ?? false)
-            }) else { continue }
-            let updated = makeMenuItem(title: title, action: item.action!, hotkeyDescription: hotkey)
+            }), let action = item.action else { continue }
+            let updated = makeMenuItem(title: title, action: action, hotkeyDescription: hotkey)
             item.attributedTitle = updated.attributedTitle
         }
     }
@@ -1034,8 +1034,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     )
                 }
 
-                // 10. Fire-and-forget: validate referenced concepts in the background
-                validateConceptsInBackground(text)
+                // 10. Fire-and-forget: validate referenced concepts in the simplified output
+                validateConceptsInBackground(simplified)
 
             } catch {
                 NSSound.beep()
@@ -1135,7 +1135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // 6. Replace in text — use regex to match concept ID + optional display term
                 var result = text
                 for (conceptId, replacement) in replacementsByCode {
-                    let pattern = NSRegularExpression.escapedPattern(for: conceptId) + "(\\s*\\|[^|]*\\|)?"
+                    let pattern = "(?<![0-9])" + NSRegularExpression.escapedPattern(for: conceptId) + "(?![0-9])" + "(\\s*\\|[^|]*\\|)?"
                     if let regex = try? NSRegularExpression(pattern: pattern) {
                         let range = NSRange(result.startIndex..., in: result)
                         result = regex.stringByReplacingMatches(

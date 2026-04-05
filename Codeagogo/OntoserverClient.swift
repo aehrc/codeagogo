@@ -824,7 +824,9 @@ final class OntoserverClient: ConceptSearching, @unchecked Sendable {
         let cmUrl = "\(snomedSystem)?fhir_cm=\(refsetId)"
         let targetUrl = "\(snomedSystem)?fhir_vs"
 
-        var components = URLComponents(url: baseURL.appendingPathComponent("ConceptMap/$translate"), resolvingAgainstBaseURL: false)!
+        guard var components = URLComponents(url: baseURL.appendingPathComponent("ConceptMap/$translate"), resolvingAgainstBaseURL: false) else {
+            return []
+        }
         components.queryItems = [
             URLQueryItem(name: "code", value: conceptId),
             URLQueryItem(name: "system", value: snomedSystem),

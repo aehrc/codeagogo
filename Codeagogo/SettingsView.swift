@@ -195,6 +195,7 @@ struct SettingsView: View {
                             modifiersRaw: $replaceInactiveHk.modifiersRaw
                         )
                         .accessibilityIdentifier("settings.replaceInactiveHotkey")
+                        .accessibilityLabel("Replace inactive concepts hotkey")
 
                         Text("Replaces inactive SNOMED CT concepts with their active replacements.")
                             .foregroundStyle(.secondary)
