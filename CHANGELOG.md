@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Features
+- **Simplify ECL** (`Shift+Control+Option+E`): One-way simplification of ECL expressions — removes redundant parentheses and formats. Derived from the Format ECL hotkey by adding Shift.
+- **Replace Inactive Concepts** (`Control+Option+I`): Select ECL containing inactive SNOMED CT concepts and replace them with active equivalents from historical associations (REPLACED BY, SAME AS, POSSIBLY EQUIVALENT TO, ALTERNATIVE) via `ConceptMap/$translate`.
+- **Canonical ECL Comparison**: `canonicalise()` and `compareExpressions()` in ECLBridge for structural equivalence checking without FHIR calls.
+- **Menu Hotkey Display**: All menu items now show the configured global hotkey shortcut in italics, updating dynamically when settings change.
+- **ecl-core 1.1.0**: Updated to ecl-core 1.1.0 with `removeRedundantParentheses` formatter option, canonical comparison, and historical association lookups.
+- **ecl-editor 1.1.0**: Updated ECL Workbench bundle — shared language registration fix, toggle display terms (Shift+Alt+T), cleaner embedded appearance.
 - **Concept Lookup** (`Control+Option+L`): Select any clinical code and see its details in a popover near your cursor — concept ID, display term, FSN, active/inactive status, edition, and code system. Supports SNOMED CT, LOINC, ICD-10, RxNorm, and configurable code systems via FHIR R4 terminology servers.
 - **Concept Search** (`Control+Option+S`): Search for concepts by term and insert the result directly into any text field. Configurable result limits and insert format.
 - **Batch Replace** (`Control+Option+R`): Select one or more codes and annotate them with `ID | display term |` format. Handles SNOMED CT, LOINC, ICD-10, and other alphanumeric codes across all available editions.
