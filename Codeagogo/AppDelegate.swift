@@ -101,12 +101,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Shared settings for the replace inactive hotkey configuration.
     private lazy var replaceInactiveHotKeySettings = ECLReplaceInactiveHotKeySettings.shared
 
-    /// Returns the hotkey description for the simplify hotkey (format hotkey + Shift).
-    private var simplifyHotkeyDescription: String {
-        let shiftBit = HotKeySettings.carbonModifiers(from: [.shift])
-        let combinedModifiers = eclFormatHotKeySettings.modifiersRaw | shiftBit
-        return KeyCodeFormatter.format(keyCode: eclFormatHotKeySettings.keyCode, modifiers: combinedModifiers)
-    }
 
     /// Bridge to ecl-core (TypeScript) running in JavaScriptCore for ECL operations.
     private lazy var eclBridge = ECLBridge()
@@ -358,61 +352,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Creates a menu item with an italicised hotkey shortcut right-aligned.
+    /// Creates a menu item with the native macOS shortcut display.
+    ///
+    /// Uses `keyEquivalent` + `keyEquivalentModifierMask` so macOS renders the
+    /// shortcut in the standard right-aligned grey style.
     ///
     /// - Parameters:
     ///   - title: The menu item title
     ///   - action: The selector to call when clicked
-    ///   - hotkeyDescription: The hotkey string (e.g., "⌃⌥E"), or nil for no shortcut display
-    /// - Returns: A configured NSMenuItem with attributed title
-    private func makeMenuItem(title: String, action: Selector, hotkeyDescription: String?) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
-
-        guard let hotkey = hotkeyDescription, !hotkey.isEmpty else { return item }
-
-        let fullText = "\(title)\t\(hotkey)"
-
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.tabStops = [NSTextTab(textAlignment: .right, location: 210)]
-
-        let attributed = NSMutableAttributedString(
-            string: fullText,
-            attributes: [
-                .font: NSFont.menuFont(ofSize: 0),
-                .paragraphStyle: paragraphStyle,
-            ]
-        )
-
-        // Italicise the hotkey portion
-        let hotkeyRange = NSRange(location: fullText.count - hotkey.count, length: hotkey.count)
-        let italicFont = NSFontManager.shared.convert(NSFont.menuFont(ofSize: 0), toHaveTrait: .italicFontMask)
-        attributed.addAttribute(.font, value: italicFont, range: hotkeyRange)
-        attributed.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: hotkeyRange)
-
-        item.attributedTitle = attributed
+    ///   - keyCode: Carbon virtual key code, or nil for no shortcut display
+    ///   - modifiers: NSEvent.ModifierFlags for the shortcut
+    /// - Returns: A configured NSMenuItem
+    private func makeMenuItem(title: String, action: Selector, keyCode: UInt32?, modifiers: NSEvent.ModifierFlags = []) -> NSMenuItem {
+        guard let keyCode, let equiv = Self.keyEquivalent(for: keyCode) else {
+            return NSMenuItem(title: title, action: action, keyEquivalent: "")
+        }
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: equiv)
+        item.keyEquivalentModifierMask = modifiers
         return item
     }
 
-    /// Updates all menu item hotkey displays when settings change.
+    /// Converts a Carbon virtual key code to an NSMenuItem keyEquivalent string.
+    private static func keyEquivalent(for keyCode: UInt32) -> String? {
+        let name = KeyCodeFormatter.keyName(for: keyCode)
+        guard name != "?" else { return nil }
+        // Single character keys → lowercase for keyEquivalent
+        if name.count == 1 { return name.lowercased() }
+        // Function keys and special keys
+        return name.lowercased()
+    }
+
+    /// Updates all menu item shortcut displays when settings change.
     private func rebuildMenuHotkeyDisplay() {
         guard let menu = statusMenu else { return }
-        let items: [(String, String?)] = [
-            ("Lookup Selection", hotKeySettings.hotkeyDescription),
-            ("Search Concepts...", searchHotKeySettings.hotkeyDescription),
-            ("Replace Selection", replaceHotKeySettings.hotkeyDescription),
-            ("Format ECL", eclFormatHotKeySettings.hotkeyDescription),
-            ("Simplify ECL", simplifyHotkeyDescription),
-            ("Replace Inactive", replaceInactiveHotKeySettings.hotkeyDescription),
-            ("Evaluate ECL...", evaluateHotKeySettings.hotkeyDescription),
-            ("Open in Shrimp", shrimpHotKeySettings.hotkeyDescription),
+
+        let updates: [(title: String, keyCode: UInt32, modifiers: NSEvent.ModifierFlags)] = [
+            ("Lookup Selection", hotKeySettings.keyCode, hotKeySettings.modifiers),
+            ("Search Concepts...", searchHotKeySettings.keyCode, searchHotKeySettings.modifiers),
+            ("Replace Selection", replaceHotKeySettings.keyCode, replaceHotKeySettings.modifiers),
+            ("Format ECL", eclFormatHotKeySettings.keyCode, eclFormatHotKeySettings.modifiers),
+            ("Simplify ECL", eclFormatHotKeySettings.keyCode, eclFormatHotKeySettings.modifiers.union(.shift)),
+            ("Replace Inactive", replaceInactiveHotKeySettings.keyCode, replaceInactiveHotKeySettings.modifiers),
+            ("Evaluate ECL...", evaluateHotKeySettings.keyCode, evaluateHotKeySettings.modifiers),
+            ("Open in Shrimp", shrimpHotKeySettings.keyCode, shrimpHotKeySettings.modifiers),
         ]
 
-        for (title, hotkey) in items {
-            guard let item = menu.items.first(where: {
-                $0.title == title || ($0.attributedTitle?.string.hasPrefix(title) ?? false)
-            }), let action = item.action else { continue }
-            let updated = makeMenuItem(title: title, action: action, hotkeyDescription: hotkey)
-            item.attributedTitle = updated.attributedTitle
+        for (title, keyCode, modifiers) in updates {
+            guard let item = menu.items.first(where: { $0.title == title }) else { continue }
+            if let equiv = Self.keyEquivalent(for: keyCode) {
+                item.keyEquivalent = equiv
+                item.keyEquivalentModifierMask = modifiers
+            }
         }
     }
 
@@ -432,25 +422,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
         menu.addItem(makeMenuItem(title: "Lookup Selection", action: #selector(lookupSelection),
-                                  hotkeyDescription: hotKeySettings.hotkeyDescription))
+                                  keyCode: hotKeySettings.keyCode, modifiers: hotKeySettings.modifiers))
         menu.addItem(makeMenuItem(title: "Search Concepts...", action: #selector(showSearchPanel),
-                                  hotkeyDescription: searchHotKeySettings.hotkeyDescription))
+                                  keyCode: searchHotKeySettings.keyCode, modifiers: searchHotKeySettings.modifiers))
         menu.addItem(makeMenuItem(title: "Replace Selection", action: #selector(replaceSelection),
-                                  hotkeyDescription: replaceHotKeySettings.hotkeyDescription))
+                                  keyCode: replaceHotKeySettings.keyCode, modifiers: replaceHotKeySettings.modifiers))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(makeMenuItem(title: "Format ECL", action: #selector(formatECLSelection),
-                                  hotkeyDescription: eclFormatHotKeySettings.hotkeyDescription))
+                                  keyCode: eclFormatHotKeySettings.keyCode, modifiers: eclFormatHotKeySettings.modifiers))
         menu.addItem(makeMenuItem(title: "Simplify ECL", action: #selector(simplifyECLSelection),
-                                  hotkeyDescription: simplifyHotkeyDescription))
+                                  keyCode: eclFormatHotKeySettings.keyCode, modifiers: eclFormatHotKeySettings.modifiers.union(.shift)))
         menu.addItem(makeMenuItem(title: "Replace Inactive", action: #selector(replaceInactiveConceptsInSelection),
-                                  hotkeyDescription: replaceInactiveHotKeySettings.hotkeyDescription))
+                                  keyCode: replaceInactiveHotKeySettings.keyCode, modifiers: replaceInactiveHotKeySettings.modifiers))
         menu.addItem(makeMenuItem(title: "Evaluate ECL...", action: #selector(evaluateECLSelection),
-                                  hotkeyDescription: evaluateHotKeySettings.hotkeyDescription))
+                                  keyCode: evaluateHotKeySettings.keyCode, modifiers: evaluateHotKeySettings.modifiers))
         menu.addItem(makeMenuItem(title: "ECL Reference...", action: #selector(showECLReference),
-                                  hotkeyDescription: nil))
+                                  keyCode: nil))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(makeMenuItem(title: "Open in Shrimp", action: #selector(openInShrimpFromSelection),
-                                  hotkeyDescription: shrimpHotKeySettings.hotkeyDescription))
+                                  keyCode: shrimpHotKeySettings.keyCode, modifiers: shrimpHotKeySettings.modifiers))
         menu.addItem(NSMenuItem.separator())
 
         let updateItem = NSMenuItem(title: "Check for Updates...", action: #selector(checkForUpdatesManually), keyEquivalent: "")
