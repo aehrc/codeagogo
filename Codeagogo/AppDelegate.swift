@@ -53,6 +53,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The menu bar status item displaying the app icon.
     private var statusItem: NSStatusItem!
 
+    /// The status bar menu, stored for dynamic hotkey display updates.
+    private var statusMenu: NSMenu?
+
     /// The popover that displays lookup results.
     private lazy var popover = NSPopover()
 
@@ -88,6 +91,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// The currently registered global hotkey handler for ECL formatting.
     private var eclFormatHotKey: GlobalHotKey?
+
+    /// The currently registered global hotkey handler for ECL simplification.
+    private var eclSimplifyHotKey: GlobalHotKey?
+
+    /// The currently registered global hotkey handler for replacing inactive concepts.
+    private var replaceInactiveHotKey: GlobalHotKey?
+
+    /// Shared settings for the replace inactive hotkey configuration.
+    private lazy var replaceInactiveHotKeySettings = ECLReplaceInactiveHotKeySettings.shared
+
 
     /// Bridge to ecl-core (TypeScript) running in JavaScriptCore for ECL operations.
     private lazy var eclBridge = ECLBridge()
@@ -180,6 +193,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupSearchHotKey()
         setupReplaceHotKey()
         setupECLFormatHotKey()
+        setupECLSimplifyHotKey()
+        setupReplaceInactiveHotKey()
         setupEvaluateHotKey()
         setupShrimpHotKey()
         setupUpdateChecker()
@@ -337,6 +352,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Creates a menu item with the native macOS shortcut display.
+    ///
+    /// Uses `keyEquivalent` + `keyEquivalentModifierMask` so macOS renders the
+    /// shortcut in the standard right-aligned grey style.
+    ///
+    /// - Parameters:
+    ///   - title: The menu item title
+    ///   - action: The selector to call when clicked
+    ///   - keyCode: Carbon virtual key code, or nil for no shortcut display
+    ///   - modifiers: NSEvent.ModifierFlags for the shortcut
+    /// - Returns: A configured NSMenuItem
+    private func makeMenuItem(title: String, action: Selector, keyCode: UInt32?, modifiers: NSEvent.ModifierFlags = []) -> NSMenuItem {
+        guard let keyCode, let equiv = Self.keyEquivalent(for: keyCode) else {
+            return NSMenuItem(title: title, action: action, keyEquivalent: "")
+        }
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: equiv)
+        item.keyEquivalentModifierMask = modifiers
+        return item
+    }
+
+    /// Converts a Carbon virtual key code to an NSMenuItem keyEquivalent string.
+    private static func keyEquivalent(for keyCode: UInt32) -> String? {
+        let name = KeyCodeFormatter.keyName(for: keyCode)
+        guard name != "?" else { return nil }
+        // Single character keys → lowercase for keyEquivalent
+        if name.count == 1 { return name.lowercased() }
+        // Function keys and special keys
+        return name.lowercased()
+    }
+
+    /// Updates all menu item shortcut displays when settings change.
+    private func rebuildMenuHotkeyDisplay() {
+        guard let menu = statusMenu else { return }
+
+        let updates: [(title: String, keyCode: UInt32, modifiers: NSEvent.ModifierFlags)] = [
+            ("Lookup Selection", hotKeySettings.keyCode, hotKeySettings.modifiers),
+            ("Search Concepts...", searchHotKeySettings.keyCode, searchHotKeySettings.modifiers),
+            ("Replace Selection", replaceHotKeySettings.keyCode, replaceHotKeySettings.modifiers),
+            ("Format ECL", eclFormatHotKeySettings.keyCode, eclFormatHotKeySettings.modifiers),
+            ("Simplify ECL", eclFormatHotKeySettings.keyCode, eclFormatHotKeySettings.modifiers.union(.shift)),
+            ("Replace Inactive", replaceInactiveHotKeySettings.keyCode, replaceInactiveHotKeySettings.modifiers),
+            ("Evaluate ECL...", evaluateHotKeySettings.keyCode, evaluateHotKeySettings.modifiers),
+            ("Open in Shrimp", shrimpHotKeySettings.keyCode, shrimpHotKeySettings.modifiers),
+        ]
+
+        for (title, keyCode, modifiers) in updates {
+            guard let item = menu.items.first(where: { $0.title == title }) else { continue }
+            if let equiv = Self.keyEquivalent(for: keyCode) {
+                item.keyEquivalent = equiv
+                item.keyEquivalentModifierMask = modifiers
+            }
+        }
+    }
+
     /// Sets up the menu bar status item with icon and context menu.
     ///
     /// Creates a status item with a magnifying glass icon and a menu
@@ -352,15 +421,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Lookup Selection", action: #selector(lookupSelection), keyEquivalent: "l"))
-        menu.addItem(NSMenuItem(title: "Search Concepts...", action: #selector(showSearchPanel), keyEquivalent: "s"))
-        menu.addItem(NSMenuItem(title: "Replace Selection", action: #selector(replaceSelection), keyEquivalent: "r"))
+        menu.addItem(makeMenuItem(title: "Lookup Selection", action: #selector(lookupSelection),
+                                  keyCode: hotKeySettings.keyCode, modifiers: hotKeySettings.modifiers))
+        menu.addItem(makeMenuItem(title: "Search Concepts...", action: #selector(showSearchPanel),
+                                  keyCode: searchHotKeySettings.keyCode, modifiers: searchHotKeySettings.modifiers))
+        menu.addItem(makeMenuItem(title: "Replace Selection", action: #selector(replaceSelection),
+                                  keyCode: replaceHotKeySettings.keyCode, modifiers: replaceHotKeySettings.modifiers))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Format ECL", action: #selector(formatECLSelection), keyEquivalent: "e"))
-        menu.addItem(NSMenuItem(title: "Evaluate ECL...", action: #selector(evaluateECLSelection), keyEquivalent: "v"))
-        menu.addItem(NSMenuItem(title: "ECL Reference...", action: #selector(showECLReference), keyEquivalent: ""))
+        menu.addItem(makeMenuItem(title: "Format ECL", action: #selector(formatECLSelection),
+                                  keyCode: eclFormatHotKeySettings.keyCode, modifiers: eclFormatHotKeySettings.modifiers))
+        menu.addItem(makeMenuItem(title: "Simplify ECL", action: #selector(simplifyECLSelection),
+                                  keyCode: eclFormatHotKeySettings.keyCode, modifiers: eclFormatHotKeySettings.modifiers.union(.shift)))
+        menu.addItem(makeMenuItem(title: "Replace Inactive", action: #selector(replaceInactiveConceptsInSelection),
+                                  keyCode: replaceInactiveHotKeySettings.keyCode, modifiers: replaceInactiveHotKeySettings.modifiers))
+        menu.addItem(makeMenuItem(title: "Evaluate ECL...", action: #selector(evaluateECLSelection),
+                                  keyCode: evaluateHotKeySettings.keyCode, modifiers: evaluateHotKeySettings.modifiers))
+        menu.addItem(makeMenuItem(title: "ECL Reference...", action: #selector(showECLReference),
+                                  keyCode: nil))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Open in Shrimp", action: #selector(openInShrimpFromSelection), keyEquivalent: "b"))
+        menu.addItem(makeMenuItem(title: "Open in Shrimp", action: #selector(openInShrimpFromSelection),
+                                  keyCode: shrimpHotKeySettings.keyCode, modifiers: shrimpHotKeySettings.modifiers))
         menu.addItem(NSMenuItem.separator())
 
         let updateItem = NSMenuItem(title: "Check for Updates...", action: #selector(checkForUpdatesManually), keyEquivalent: "")
@@ -371,6 +451,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
         statusItem.menu = menu
+        statusMenu = menu
     }
 
     /// Configures the popover with the SwiftUI content view.
@@ -445,6 +526,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
                 self.hotKey?.update(keyCode: newKeyCode, modifiers: mods)
+                self.rebuildMenuHotkeyDisplay()
             }
             .store(in: &cancellables)
     }
@@ -478,6 +560,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
                 self.searchHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+                self.rebuildMenuHotkeyDisplay()
             }
             .store(in: &cancellables)
     }
@@ -512,6 +595,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
                 self.replaceHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+                self.rebuildMenuHotkeyDisplay()
             }
             .store(in: &cancellables)
     }
@@ -545,6 +629,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
                 self.eclFormatHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+                self.rebuildMenuHotkeyDisplay()
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Registers the ECL simplify hotkey (Shift + ECL Format hotkey).
+    ///
+    /// Derived from the ECL format hotkey by adding Shift. Not independently
+    /// configurable — updates automatically when the format hotkey changes.
+    /// Uses id=7 to distinguish from other hotkeys.
+    private func setupECLSimplifyHotKey() {
+        let formatModifiers = ECLFormatHotKeySettings.currentModifiers
+        eclSimplifyHotKey = GlobalHotKey(
+            keyCode: ECLFormatHotKeySettings.currentKeyCode,
+            modifiers: formatModifiers.union(.shift),
+            id: 7
+        ) { [weak self] in
+            self?.simplifyECLSelection()
+        }
+        eclSimplifyHotKey?.start()
+
+        // Update when format hotkey settings change (reuses same Combine pipeline)
+        Publishers.CombineLatest(eclFormatHotKeySettings.$keyCode, eclFormatHotKeySettings.$modifiersRaw)
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newKeyCode, newModifiersRaw in
+                guard let self else { return }
+                var mods: NSEvent.ModifierFlags = []
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.control])) != 0 { mods.insert(.control) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.option])) != 0 { mods.insert(.option) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
+                mods.insert(.shift)  // Always add Shift for simplify
+                self.eclSimplifyHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+                self.rebuildMenuHotkeyDisplay()
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Registers the Replace Inactive Concepts hotkey and sets up observation for settings changes.
+    ///
+    /// Uses id=8 to distinguish from other hotkeys.
+    private func setupReplaceInactiveHotKey() {
+        replaceInactiveHotKey = GlobalHotKey(
+            keyCode: ECLReplaceInactiveHotKeySettings.currentKeyCode,
+            modifiers: ECLReplaceInactiveHotKeySettings.currentModifiers,
+            id: 8
+        ) { [weak self] in
+            self?.replaceInactiveConceptsInSelection()
+        }
+        replaceInactiveHotKey?.start()
+
+        Publishers.CombineLatest(replaceInactiveHotKeySettings.$keyCode, replaceInactiveHotKeySettings.$modifiersRaw)
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newKeyCode, newModifiersRaw in
+                guard let self else { return }
+                self.replaceInactiveHotKeySettings.save()
+                var mods: NSEvent.ModifierFlags = []
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.control])) != 0 { mods.insert(.control) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.option])) != 0 { mods.insert(.option) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
+                if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
+                self.replaceInactiveHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+                self.rebuildMenuHotkeyDisplay()
             }
             .store(in: &cancellables)
     }
@@ -576,6 +725,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
                 self.evaluateHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+                self.rebuildMenuHotkeyDisplay()
             }
             .store(in: &cancellables)
     }
@@ -609,6 +759,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.command])) != 0 { mods.insert(.command) }
                 if (newModifiersRaw & HotKeySettings.carbonModifiers(from: [.shift])) != 0 { mods.insert(.shift) }
                 self.shrimpHotKey?.update(keyCode: newKeyCode, modifiers: mods)
+                self.rebuildMenuHotkeyDisplay()
             }
             .store(in: &cancellables)
     }
@@ -795,6 +946,244 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 AppLog.error(AppLog.ui, "ECL format failed: \(error)")
             }
         }
+    }
+
+    /// Simplifies the selected ECL expression by removing redundant parentheses and formatting.
+    ///
+    /// This is a one-way operation (not a toggle). Reads the selection, formats with
+    /// `removeRedundantParentheses: true`, and replaces the selection with the simplified result.
+    @objc private func simplifyECLSelection() {
+        Task { @MainActor in
+            do {
+                let reader = SystemSelectionReader()
+
+                // 1. Read selection
+                let text = try reader.readSelectionByCopying()
+
+                guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    NSSound.beep()
+                    AppLog.warning(AppLog.ui, "ECL simplify failed: empty selection")
+                    return
+                }
+
+                // 2. Parse first to check for errors
+                let parseResult = eclBridge.parseECL(text)
+                if !parseResult.errors.isEmpty {
+                    let error = parseResult.errors[0]
+                    let location = error.column > 0 ? "Col \(error.column): " : ""
+                    progressHUD.showError(message: "\(location)\(error.message)")
+                    NSSound.beep()
+                    AppLog.warning(AppLog.ui, "ECL simplify failed: \(error.message) (line \(error.line), col \(error.column))")
+                    return
+                }
+
+                // 3. Capture any ambiguous-precedence warnings
+                let precedenceWarnings = parseResult.warnings
+                if !precedenceWarnings.isEmpty {
+                    AppLog.info(AppLog.ui, "ECL parse warnings: \(precedenceWarnings)")
+                }
+
+                // 4. Format with removeRedundantParentheses enabled
+                var options = ECLBridge.FormattingOptions()
+                options.removeRedundantParentheses = true
+                guard let simplified = eclBridge.formatECL(text, options: options) else {
+                    NSSound.beep()
+                    AppLog.warning(AppLog.ui, "ECL simplify failed: could not format")
+                    return
+                }
+
+                // 5. Check if anything changed
+                let inputNorm = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let outputNorm = simplified.trimmingCharacters(in: .whitespacesAndNewlines)
+                if inputNorm == outputNorm {
+                    progressHUD.showWarning(message: "No simplification needed")
+                    AppLog.info(AppLog.ui, "ECL simplify: no changes needed")
+                    return
+                }
+
+                // 6. Put simplified text on clipboard
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.setString(simplified, forType: .string)
+
+                // 7. Small delay to ensure clipboard is ready
+                try await Task.sleep(nanoseconds: 50_000_000)
+
+                // 8. Paste and select the inserted text
+                if !reader.pasteAndSelect(textLength: simplified.utf16.count) {
+                    throw LookupError.accessibilityPermissionLikelyMissing
+                }
+
+                AppLog.info(AppLog.ui, "Simplified ECL expression")
+
+                // 9. Show ambiguous-precedence warning after simplify completes
+                if !precedenceWarnings.isEmpty {
+                    progressHUD.showError(
+                        message: "Mixed AND/OR \u{2014} consider adding parentheses",
+                        duration: 4
+                    )
+                }
+
+                // 10. Fire-and-forget: validate referenced concepts in the simplified output
+                validateConceptsInBackground(simplified)
+
+            } catch {
+                NSSound.beep()
+                AppLog.error(AppLog.ui, "ECL simplify failed: \(error)")
+            }
+        }
+    }
+
+    /// Replaces inactive SNOMED CT concepts in the selected ECL with their active replacements.
+    ///
+    /// Extracts concept IDs from the selection, checks which are inactive via batch lookup,
+    /// looks up historical associations for each inactive concept, and replaces them with
+    /// active equivalents. Priority: replaced-by > same-as > possibly-equivalent-to > alternative.
+    @objc private func replaceInactiveConceptsInSelection() {
+        Task { @MainActor in
+            do {
+                let reader = SystemSelectionReader()
+
+                // 1. Read selection
+                let text = try reader.readSelectionByCopying()
+
+                guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    NSSound.beep()
+                    AppLog.warning(AppLog.ui, "Replace inactive failed: empty selection")
+                    return
+                }
+
+                // 2. Extract concept IDs via ecl-core
+                let concepts = eclBridge.extractConceptIds(text)
+                guard !concepts.isEmpty else {
+                    NSSound.beep()
+                    progressHUD.showWarning(message: "No concepts found")
+                    AppLog.warning(AppLog.ui, "Replace inactive: no concepts in selection")
+                    return
+                }
+
+                progressHUD.show(message: "Checking concepts...")
+
+                // 3. Batch lookup to find inactive ones
+                let conceptIds = concepts.map(\.id)
+                let batchResult = try await ontoserverClient.batchLookup(conceptIds: conceptIds)
+
+                let inactiveIds = conceptIds.filter { batchResult.isActive(for: $0) == false }
+
+                guard !inactiveIds.isEmpty else {
+                    progressHUD.hide()
+                    progressHUD.showWarning(message: "No inactive concepts")
+                    AppLog.info(AppLog.ui, "Replace inactive: all concepts are active")
+                    return
+                }
+
+                progressHUD.show(message: "Looking up replacements...")
+
+                // 4. Get historical associations for each inactive concept in parallel
+                var associationsByCode: [String: [OntoserverClient.HistoricalAssociation]] = [:]
+                try await withThrowingTaskGroup(of: (String, [OntoserverClient.HistoricalAssociation]).self) { group in
+                    for conceptId in inactiveIds {
+                        group.addTask {
+                            let assocs = try await self.ontoserverClient.getHistoricalAssociations(conceptId: conceptId)
+                            return (conceptId, assocs)
+                        }
+                    }
+                    for try await (conceptId, assocs) in group {
+                        associationsByCode[conceptId] = assocs
+                    }
+                }
+
+                // 5. Build replacements using priority order
+                let priorityOrder: [OntoserverClient.HistoricalAssociationType] = [
+                    .replacedBy, .sameAs, .possiblyEquivalentTo, .alternative,
+                ]
+                var replacementsByCode: [String: String] = [:]
+                var noReplacementIds: [String] = []
+
+                for conceptId in inactiveIds {
+                    let assocs = associationsByCode[conceptId] ?? []
+                    var found = false
+                    for type in priorityOrder {
+                        if let assoc = assocs.first(where: { $0.type == type }) {
+                            replacementsByCode[conceptId] = buildReplacementText(from: assoc)
+                            found = true
+                            break
+                        }
+                    }
+                    if !found {
+                        noReplacementIds.append(conceptId)
+                    }
+                }
+
+                guard !replacementsByCode.isEmpty else {
+                    progressHUD.hide()
+                    progressHUD.showWarning(message: "No replacements available")
+                    AppLog.info(AppLog.ui, "Replace inactive: no historical associations found")
+                    return
+                }
+
+                // 6. Replace in text — use regex to match concept ID + optional display term
+                var result = text
+                for (conceptId, replacement) in replacementsByCode {
+                    let pattern = "(?<![0-9])" + NSRegularExpression.escapedPattern(for: conceptId) + "(?![0-9])" + "(\\s*\\|[^|]*\\|)?"
+                    if let regex = try? NSRegularExpression(pattern: pattern) {
+                        let range = NSRange(result.startIndex..., in: result)
+                        result = regex.stringByReplacingMatches(
+                            in: result,
+                            options: [],
+                            range: range,
+                            withTemplate: NSRegularExpression.escapedTemplate(for: replacement)
+                        )
+                    }
+                }
+
+                // 7. Put result on clipboard and paste
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.setString(result, forType: .string)
+
+                try await Task.sleep(nanoseconds: 50_000_000)
+
+                if !reader.pasteAndSelect(textLength: result.utf16.count) {
+                    throw LookupError.accessibilityPermissionLikelyMissing
+                }
+
+                progressHUD.hide()
+
+                let count = replacementsByCode.count
+                var message = "Replaced \(count) inactive concept\(count == 1 ? "" : "s")"
+                if !noReplacementIds.isEmpty {
+                    message += " (\(noReplacementIds.count) had no replacement)"
+                }
+                AppLog.info(AppLog.ui, message)
+
+            } catch {
+                progressHUD.hide()
+                NSSound.beep()
+                AppLog.error(AppLog.ui, "Replace inactive failed: \(error)")
+            }
+        }
+    }
+
+    /// Builds replacement ECL text from a historical association.
+    ///
+    /// - Single target: `code |display|`
+    /// - Multiple targets: `(code1 |display1| OR code2 |display2|)`
+    private func buildReplacementText(from association: OntoserverClient.HistoricalAssociation) -> String {
+        let targets = association.targets
+        guard !targets.isEmpty else { return "" }
+
+        if targets.count == 1 {
+            let target = targets[0]
+            let display = target.display.isEmpty ? "" : " |\(target.display)|"
+            return target.code + display
+        }
+
+        let parts = targets.map { target in
+            let display = target.display.isEmpty ? "" : " |\(target.display)|"
+            return target.code + display
+        }
+        return "(" + parts.joined(separator: " OR ") + ")"
     }
 
     /// Opens the selected concept in the Shrimp terminology browser.

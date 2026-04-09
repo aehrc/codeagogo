@@ -370,4 +370,314 @@ final class ECLBridgeTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(docs.count, 10,
                                     "Should have at least 10 operator docs (got \(docs.count))")
     }
+
+    // MARK: - Remove Redundant Parentheses Tests
+
+    func testRemoveRedundantParentheses_unwrapsSingleConcept() {
+        var options = ECLBridge.FormattingOptions()
+        options.removeRedundantParentheses = true
+        let result = bridge.formatECL("(404684003)", options: options)
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.trimmingCharacters(in: .whitespacesAndNewlines), "404684003")
+    }
+
+    func testRemoveRedundantParentheses_flattensSameOperator() throws {
+        var options = ECLBridge.FormattingOptions()
+        options.removeRedundantParentheses = true
+        let result = bridge.formatECL("(<< 404684003 AND << 73211009) AND << 38341003", options: options)
+        let trimmed = try XCTUnwrap(result).trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertFalse(trimmed.hasPrefix("("))
+    }
+
+    func testRemoveRedundantParentheses_preservesRequiredParens() throws {
+        var options = ECLBridge.FormattingOptions()
+        options.removeRedundantParentheses = true
+        let result = bridge.formatECL("(<< 404684003 OR << 73211009) AND << 38341003", options: options)
+        let trimmed = try XCTUnwrap(result).trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertTrue(trimmed.contains("("))
+    }
+
+    func testRemoveRedundantParentheses_nestedRedundant() {
+        var options = ECLBridge.FormattingOptions()
+        options.removeRedundantParentheses = true
+        let result = bridge.formatECL("((404684003))", options: options)
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.trimmingCharacters(in: .whitespacesAndNewlines), "404684003")
+    }
+
+    func testRemoveRedundantParentheses_defaultFalse() {
+        let result = bridge.formatECL("(404684003)")
+        XCTAssertNotNil(result)
+        XCTAssertTrue(result?.contains("(") ?? false)
+    }
+
+    // MARK: - Canonical Comparison Tests
+
+    func testCanonicalise_sortsOperands() {
+        let result = bridge.canonicalise("<< 73211009 OR << 404684003")
+        XCTAssertNotNil(result)
+        guard let canonical = result else { return }
+        let idx404 = canonical.range(of: "404684003")
+        let idx732 = canonical.range(of: "73211009")
+        XCTAssertNotNil(idx404)
+        XCTAssertNotNil(idx732)
+        if let idx404, let idx732 {
+            XCTAssertTrue(idx404.lowerBound < idx732.lowerBound, "404684003 should come before 73211009 in canonical form")
+        }
+    }
+
+    func testCanonicalise_stripsDisplayTerms() {
+        let result = bridge.canonicalise("404684003 |Clinical finding|")
+        XCTAssertNotNil(result)
+        XCTAssertFalse(result?.contains("Clinical finding") ?? true)
+        XCTAssertTrue(result?.contains("404684003") ?? false)
+    }
+
+    func testCanonicalise_invalidECL_returnsNil() {
+        let result = bridge.canonicalise("AND OR NOT <<<>>>")
+        XCTAssertNil(result)
+    }
+
+    func testCompareExpressions_identical() {
+        let result = bridge.compareExpressions("<< 404684003", "<< 404684003")
+        XCTAssertEqual(result, "identical")
+    }
+
+    func testCompareExpressions_structurallyEquivalent() {
+        let result = bridge.compareExpressions(
+            "<< 73211009 OR << 404684003",
+            "<< 404684003 OR << 73211009"
+        )
+        XCTAssertEqual(result, "structurally_equivalent")
+    }
+
+    func testCompareExpressions_different() {
+        let result = bridge.compareExpressions("<< 404684003", "<< 73211009")
+        XCTAssertEqual(result, "different")
+    }
+
+    func testCompareExpressions_invalidECL_returnsNil() {
+        let result = bridge.compareExpressions("<<<>>>", "<< 404684003")
+        XCTAssertNil(result)
+    }
+
+    // MARK: - Replacement Text Builder Tests
+
+    /// Tests building replacement text for a single target with display term.
+    func testBuildReplacementText_singleTarget_withDisplay() {
+        let result = Self.buildReplacementText(targets: [("999999013", "Replacement concept")])
+        XCTAssertEqual(result, "999999013 |Replacement concept|")
+    }
+
+    /// Tests building replacement text for a single target without display term.
+    func testBuildReplacementText_singleTarget_noDisplay() {
+        let result = Self.buildReplacementText(targets: [("999999013", "")])
+        XCTAssertEqual(result, "999999013")
+    }
+
+    /// Tests building replacement text for multiple targets (OR disjunction).
+    func testBuildReplacementText_multipleTargets() {
+        let result = Self.buildReplacementText(targets: [
+            ("111111111", "Target A"),
+            ("222222222", "Target B"),
+        ])
+        XCTAssertEqual(result, "(111111111 |Target A| OR 222222222 |Target B|)")
+    }
+
+    /// Tests building replacement text for no targets (empty string).
+    func testBuildReplacementText_noTargets() {
+        let result = Self.buildReplacementText(targets: [])
+        XCTAssertEqual(result, "")
+    }
+
+    /// Tests building replacement text for three targets.
+    func testBuildReplacementText_threeTargets() {
+        let result = Self.buildReplacementText(targets: [
+            ("111111111", "A"),
+            ("222222222", "B"),
+            ("333333333", "C"),
+        ])
+        XCTAssertEqual(result, "(111111111 |A| OR 222222222 |B| OR 333333333 |C|)")
+    }
+
+    /// Pure replacement builder — mirrors AppDelegate.buildReplacementText logic.
+    private static func buildReplacementText(targets: [(code: String, display: String)]) -> String {
+        guard !targets.isEmpty else { return "" }
+
+        if targets.count == 1 {
+            let target = targets[0]
+            let display = target.display.isEmpty ? "" : " |\(target.display)|"
+            return target.code + display
+        }
+
+        let parts = targets.map { target in
+            let display = target.display.isEmpty ? "" : " |\(target.display)|"
+            return target.code + display
+        }
+        return "(" + parts.joined(separator: " OR ") + ")"
+    }
+
+    // MARK: - Replacement Regex Tests
+
+    /// Tests replacing a bare concept ID in ECL.
+    func testReplaceInactive_bareConceptId() {
+        let result = Self.replaceConceptInText(
+            "<< 12345678901",
+            conceptId: "12345678901",
+            replacement: "999999013 |Active replacement|"
+        )
+        XCTAssertEqual(result, "<< 999999013 |Active replacement|")
+    }
+
+    /// Tests replacing a concept ID that has an existing display term.
+    func testReplaceInactive_conceptWithExistingDisplayTerm() {
+        let result = Self.replaceConceptInText(
+            "<< 12345678901 |Old term|",
+            conceptId: "12345678901",
+            replacement: "999999013 |New term|"
+        )
+        XCTAssertEqual(result, "<< 999999013 |New term|")
+    }
+
+    /// Tests replacing multiple occurrences of the same concept.
+    func testReplaceInactive_multipleOccurrences() {
+        let result = Self.replaceConceptInText(
+            "<< 12345678901 OR << 12345678901",
+            conceptId: "12345678901",
+            replacement: "999999013"
+        )
+        XCTAssertEqual(result, "<< 999999013 OR << 999999013")
+    }
+
+    /// Tests that only the target concept is replaced, not other concepts.
+    func testReplaceInactive_doesNotReplaceOtherConcepts() {
+        let result = Self.replaceConceptInText(
+            "<< 12345678901 AND << 404684003",
+            conceptId: "12345678901",
+            replacement: "999999013"
+        )
+        XCTAssertEqual(result, "<< 999999013 AND << 404684003")
+    }
+
+    /// Tests replacing a concept with a multi-target disjunction.
+    func testReplaceInactive_multiTargetDisjunction() {
+        let result = Self.replaceConceptInText(
+            "<< 12345678901",
+            conceptId: "12345678901",
+            replacement: "(111111111 |A| OR 222222222 |B|)"
+        )
+        XCTAssertEqual(result, "<< (111111111 |A| OR 222222222 |B|)")
+    }
+
+    /// Tests preserving surrounding ECL operators and structure.
+    func testReplaceInactive_preservesOperators() {
+        let result = Self.replaceConceptInText(
+            "<< 12345678901 |Old|: 363698007 = << 39057004",
+            conceptId: "12345678901",
+            replacement: "999999013 |New|"
+        )
+        XCTAssertEqual(result, "<< 999999013 |New|: 363698007 = << 39057004")
+    }
+
+    /// Tests that a concept ID that is a prefix of another is not matched.
+    func testReplaceInactive_conceptIdNotSubstringMatched() {
+        // 123456789 should not match inside 12345678901 thanks to digit boundary assertions
+        let result = Self.replaceConceptInText(
+            "<< 12345678901",
+            conceptId: "123456789",
+            replacement: "REPLACED"
+        )
+        // With (?<![0-9]) and (?![0-9]) boundaries, the shorter ID should NOT match
+        XCTAssertEqual(result, "<< 12345678901")
+    }
+
+    /// Tests replacing concept with display term that has spaces around pipes.
+    func testReplaceInactive_displayTermWithSpaces() {
+        let result = Self.replaceConceptInText(
+            "<< 12345678901 |Some old term|",
+            conceptId: "12345678901",
+            replacement: "999999013 |New term|"
+        )
+        XCTAssertEqual(result, "<< 999999013 |New term|")
+    }
+
+    /// Tests that text without the target concept is unchanged.
+    func testReplaceInactive_noMatch() {
+        let result = Self.replaceConceptInText(
+            "<< 404684003 |Clinical finding|",
+            conceptId: "12345678901",
+            replacement: "999999013"
+        )
+        XCTAssertEqual(result, "<< 404684003 |Clinical finding|")
+    }
+
+    // MARK: - Priority Selection Tests
+
+    /// Tests that replacedBy is preferred over sameAs.
+    func testPrioritySelection_replacedByPreferred() {
+        let associations: [(type: String, code: String)] = [
+            ("same-as", "111111111"),
+            ("replaced-by", "222222222"),
+            ("alternative", "333333333"),
+        ]
+        let selected = Self.selectBestReplacement(associations: associations)
+        XCTAssertEqual(selected, "222222222")
+    }
+
+    /// Tests that sameAs is used when replacedBy is not available.
+    func testPrioritySelection_sameAsFallback() {
+        let associations: [(type: String, code: String)] = [
+            ("same-as", "111111111"),
+            ("alternative", "333333333"),
+        ]
+        let selected = Self.selectBestReplacement(associations: associations)
+        XCTAssertEqual(selected, "111111111")
+    }
+
+    /// Tests that possiblyEquivalentTo is used when higher priority not available.
+    func testPrioritySelection_possiblyEquivalentFallback() {
+        let associations: [(type: String, code: String)] = [
+            ("possibly-equivalent-to", "222222222"),
+            ("alternative", "333333333"),
+        ]
+        let selected = Self.selectBestReplacement(associations: associations)
+        XCTAssertEqual(selected, "222222222")
+    }
+
+    /// Tests that alternative is used as last resort.
+    func testPrioritySelection_alternativeLastResort() {
+        let associations: [(type: String, code: String)] = [
+            ("alternative", "333333333"),
+        ]
+        let selected = Self.selectBestReplacement(associations: associations)
+        XCTAssertEqual(selected, "333333333")
+    }
+
+    /// Tests that nil is returned when no associations available.
+    func testPrioritySelection_noAssociations() {
+        let selected = Self.selectBestReplacement(associations: [])
+        XCTAssertNil(selected)
+    }
+
+    // MARK: - Replacement Test Helpers
+
+    /// Mirrors the regex replacement logic from AppDelegate.replaceInactiveConceptsInSelection.
+    private static func replaceConceptInText(_ text: String, conceptId: String, replacement: String) -> String {
+        let pattern = "(?<![0-9])" + NSRegularExpression.escapedPattern(for: conceptId) + "(?![0-9])" + "(\\s*\\|[^|]*\\|)?"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        let range = NSRange(text.startIndex..., in: text)
+        let escaped = NSRegularExpression.escapedTemplate(for: replacement)
+        return regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: escaped)
+    }
+
+    /// Mirrors the priority selection logic from AppDelegate.replaceInactiveConceptsInSelection.
+    private static func selectBestReplacement(associations: [(type: String, code: String)]) -> String? {
+        let priorityOrder = ["replaced-by", "same-as", "possibly-equivalent-to", "alternative"]
+        for type in priorityOrder {
+            if let assoc = associations.first(where: { $0.type == type }) {
+                return assoc.code
+            }
+        }
+        return nil
+    }
 }

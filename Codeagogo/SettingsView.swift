@@ -25,6 +25,7 @@ struct SettingsView: View {
     @ObservedObject private var evaluateHk = EvaluateHotKeySettings.shared
     @ObservedObject private var evaluateSettings = EvaluateSettings.shared
     @ObservedObject private var shrimpHk = ShrimpHotKeySettings.shared
+    @ObservedObject private var replaceInactiveHk = ECLReplaceInactiveHotKeySettings.shared
     @ObservedObject private var codeSystemSettings = CodeSystemSettings.shared
     @ObservedObject private var installMetrics = InstallMetrics.shared
     @ObservedObject private var updateChecker = UpdateChecker.shared
@@ -181,6 +182,22 @@ struct SettingsView: View {
                         .accessibilityIdentifier("settings.evaluateResultLimit")
 
                         Text("Evaluates selected ECL and shows matching concepts.")
+                            .foregroundStyle(.secondary)
+                            .font(.footnote)
+                    }
+                    .padding(.top, 4)
+                }
+
+                GroupBox("Replace Inactive Hotkey") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HotKeyRecorderView(
+                            keyCode: $replaceInactiveHk.keyCode,
+                            modifiersRaw: $replaceInactiveHk.modifiersRaw
+                        )
+                        .accessibilityIdentifier("settings.replaceInactiveHotkey")
+                        .accessibilityLabel("Replace inactive concepts hotkey")
+
+                        Text("Replaces inactive SNOMED CT concepts with their active replacements.")
                             .foregroundStyle(.secondary)
                             .font(.footnote)
                     }

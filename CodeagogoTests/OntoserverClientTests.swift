@@ -1416,3 +1416,159 @@ extension OntoserverClientTests {
         XCTAssertEqual(first?.display, "Heart rate")
     }
 }
+
+// MARK: - Historical Associations Tests
+
+extension OntoserverClientTests {
+
+    // MARK: - getHistoricalAssociations() Tests
+
+    func testGetHistoricalAssociations_noAssociations() async throws {
+        let mock = MockURLSession()
+        let noMatchResponse = """
+        {"resourceType": "Parameters", "parameter": [{"name": "result", "valueBoolean": false}]}
+        """
+        mock.enqueueResponse(json: noMatchResponse)
+        mock.enqueueResponse(json: noMatchResponse)
+        mock.enqueueResponse(json: noMatchResponse)
+        mock.enqueueResponse(json: noMatchResponse)
+
+        let client = OntoserverClient(session: mock)
+        let associations = try await client.getHistoricalAssociations(conceptId: "404684003")
+
+        XCTAssertTrue(associations.isEmpty)
+    }
+
+    func testGetHistoricalAssociations_verifyURLConstruction() async throws {
+        let mock = MockURLSession()
+        let noMatchResponse = """
+        {"resourceType": "Parameters", "parameter": [{"name": "result", "valueBoolean": false}]}
+        """
+        mock.enqueueResponse(json: noMatchResponse)
+        mock.enqueueResponse(json: noMatchResponse)
+        mock.enqueueResponse(json: noMatchResponse)
+        mock.enqueueResponse(json: noMatchResponse)
+
+        let client = OntoserverClient(session: mock)
+        _ = try await client.getHistoricalAssociations(conceptId: "12345678901")
+
+        XCTAssertEqual(mock.requests.count, 4)
+        let firstURL = mock.requests[0].url?.absoluteString ?? ""
+        XCTAssertTrue(firstURL.contains("ConceptMap/$translate"))
+        XCTAssertTrue(firstURL.contains("12345678901"))
+    }
+
+    func testGetHistoricalAssociations_withTargets() async throws {
+        let mock = MockURLSession()
+        let matchResponse = """
+        {
+            "resourceType": "Parameters",
+            "parameter": [
+                {"name": "result", "valueBoolean": true},
+                {
+                    "name": "match",
+                    "part": [
+                        {"name": "equivalence", "valueCode": "equivalent"},
+                        {"name": "concept", "valueCoding": {"code": "999999013", "display": "Active replacement"}}
+                    ]
+                }
+            ]
+        }
+        """
+        // All 4 requests return a match (since parallel execution order is nondeterministic)
+        mock.enqueueResponse(json: matchResponse)
+        mock.enqueueResponse(json: matchResponse)
+        mock.enqueueResponse(json: matchResponse)
+        mock.enqueueResponse(json: matchResponse)
+
+        let client = OntoserverClient(session: mock)
+        let associations = try await client.getHistoricalAssociations(conceptId: "12345678901")
+
+        XCTAssertFalse(associations.isEmpty)
+        // All associations should have the target
+        for assoc in associations {
+            XCTAssertEqual(assoc.targets.count, 1)
+            XCTAssertEqual(assoc.targets[0].code, "999999013")
+            XCTAssertEqual(assoc.targets[0].display, "Active replacement")
+        }
+    }
+
+    func testGetHistoricalAssociations_multipleTargets() async throws {
+        let mock = MockURLSession()
+        let matchResponse = """
+        {
+            "resourceType": "Parameters",
+            "parameter": [
+                {"name": "result", "valueBoolean": true},
+                {
+                    "name": "match",
+                    "part": [
+                        {"name": "concept", "valueCoding": {"code": "111111111", "display": "Target A"}}
+                    ]
+                },
+                {
+                    "name": "match",
+                    "part": [
+                        {"name": "concept", "valueCoding": {"code": "222222222", "display": "Target B"}}
+                    ]
+                }
+            ]
+        }
+        """
+        mock.enqueueResponse(json: matchResponse)
+        mock.enqueueResponse(json: matchResponse)
+        mock.enqueueResponse(json: matchResponse)
+        mock.enqueueResponse(json: matchResponse)
+
+        let client = OntoserverClient(session: mock)
+        let associations = try await client.getHistoricalAssociations(conceptId: "12345678901")
+
+        XCTAssertFalse(associations.isEmpty)
+        let multiTarget = associations.first { $0.targets.count >= 2 }
+        XCTAssertNotNil(multiTarget)
+        if let assoc = multiTarget {
+            XCTAssertEqual(assoc.targets.count, 2)
+        }
+    }
+
+    func testGetHistoricalAssociations_networkError() async throws {
+        let mock = MockURLSession()
+        mock.mockError = URLError(.notConnectedToInternet)
+
+        let client = OntoserverClient(session: mock)
+
+        do {
+            _ = try await client.getHistoricalAssociations(conceptId: "12345678901")
+            XCTFail("Expected error to be thrown")
+        } catch {
+            XCTAssertTrue(error is URLError)
+        }
+    }
+
+    func testGetHistoricalAssociations_returnsInSpecificityOrder() async throws {
+        let mock = MockURLSession()
+        let matchResponse = """
+        {
+            "resourceType": "Parameters",
+            "parameter": [
+                {"name": "result", "valueBoolean": true},
+                {"name": "match", "part": [{"name": "concept", "valueCoding": {"code": "999999013", "display": "Target"}}]}
+            ]
+        }
+        """
+        mock.enqueueResponse(json: matchResponse)
+        mock.enqueueResponse(json: matchResponse)
+        mock.enqueueResponse(json: matchResponse)
+        mock.enqueueResponse(json: matchResponse)
+
+        let client = OntoserverClient(session: mock)
+        let associations = try await client.getHistoricalAssociations(conceptId: "12345678901")
+
+        // Should be in specificity order: sameAs, replacedBy, possiblyEquivalentTo, alternative
+        XCTAssertEqual(associations.count, 4)
+        XCTAssertEqual(associations[0].type, .sameAs)
+        XCTAssertEqual(associations[1].type, .replacedBy)
+        XCTAssertEqual(associations[2].type, .possiblyEquivalentTo)
+        XCTAssertEqual(associations[3].type, .alternative)
+    }
+}
