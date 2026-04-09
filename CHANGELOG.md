@@ -4,7 +4,7 @@ All notable changes to Codeagogo are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.1.0] - 2026-04-09
+## [Unreleased]
 
 ### Features
 - **Simplify ECL** (`Shift+Control+Option+E`): One-way simplification of ECL expressions — removes redundant parentheses and formats. Derived from the Format ECL hotkey by adding Shift.
