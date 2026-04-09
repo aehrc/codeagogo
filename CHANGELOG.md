@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-04
+
 ### Features
 - **Simplify ECL** (`Shift+Control+Option+E`): One-way simplification of ECL expressions — removes redundant parentheses and formats. Derived from the Format ECL hotkey by adding Shift.
 - **Replace Inactive Concepts** (`Control+Option+I`): Select ECL containing inactive SNOMED CT concepts and replace them with active equivalents from historical associations (REPLACED BY, SAME AS, POSSIBLY EQUIVALENT TO, ALTERNATIVE) via `ConceptMap/$translate`.
