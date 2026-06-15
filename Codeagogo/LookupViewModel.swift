@@ -419,6 +419,33 @@ final class LookupViewModel: ObservableObject {
         return ConceptMatch(conceptId: conceptId, range: fullRange, existingTerm: existingTerm, isSCTID: isSCTID)
     }
 
+    /// Replaces inactive concept IDs in `text` with their target replacements.
+    ///
+    /// Each concept ID present in `replacementsByCode` (along with its optional
+    /// pipe-delimited term) is replaced by the mapped replacement string.
+    ///
+    /// Replacements are located against the **original** `text` via
+    /// ``extractAllConceptIds(from:)`` and applied in reverse positional order
+    /// using `replaceSubrange`. Because positions are resolved before any
+    /// mutation and applied back-to-front, text inserted by one replacement can
+    /// never be re-matched by another. This avoids the corruption that a chained
+    /// regex over an accumulating result produces when one inactive concept's
+    /// replacement target equals another inactive concept's ID (see issue #2).
+    ///
+    /// - Parameters:
+    ///   - text: The original selection text.
+    ///   - replacementsByCode: Map of inactive concept ID → replacement ECL text.
+    /// - Returns: The text with inactive concepts replaced.
+    func replacingInactiveConcepts(in text: String, with replacementsByCode: [String: String]) -> String {
+        let matches = extractAllConceptIds(from: text)
+        var result = text
+        for match in matches.reversed() {
+            guard let replacement = replacementsByCode[match.conceptId] else { continue }
+            result.replaceSubrange(match.range, with: replacement)
+        }
+        return result
+    }
+
     /// Copies a string to the system pasteboard.
     ///
     /// - Parameter s: The string to copy. If `nil` or empty, no action is taken.

@@ -1122,20 +1122,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     return
                 }
 
-                // 6. Replace in text — use regex to match concept ID + optional display term
-                var result = text
-                for (conceptId, replacement) in replacementsByCode {
-                    let pattern = "(?<![0-9])" + NSRegularExpression.escapedPattern(for: conceptId) + "(?![0-9])" + "(\\s*\\|[^|]*\\|)?"
-                    if let regex = try? NSRegularExpression(pattern: pattern) {
-                        let range = NSRange(result.startIndex..., in: result)
-                        result = regex.stringByReplacingMatches(
-                            in: result,
-                            options: [],
-                            range: range,
-                            withTemplate: NSRegularExpression.escapedTemplate(for: replacement)
-                        )
-                    }
-                }
+                // 6. Replace in text using position-based substitution against the
+                //    original text. Matching the concept ID (plus its optional display
+                //    term) by position and applying replacements in reverse order makes
+                //    each replacement immune to text inserted by other iterations —
+                //    avoiding corruption when one inactive concept's replacement target
+                //    equals another inactive concept's ID (see issue #2).
+                let result = model.replacingInactiveConcepts(in: text, with: replacementsByCode)
 
                 // 7. Put result on clipboard and paste
                 let pb = NSPasteboard.general

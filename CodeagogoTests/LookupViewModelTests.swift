@@ -413,4 +413,62 @@ final class LookupViewModelTests: XCTestCase {
 
         XCTAssertEqual(result, "73211009")
     }
+
+    // MARK: - Replace Inactive Concepts Tests
+
+    /// Regression test for issue #2: when one inactive concept's replacement
+    /// target SCTID equals another inactive concept's ID in the same selection,
+    /// the chained-regex approach corrupted the output by re-matching inserted
+    /// text. Position-based substitution against the original text must map each
+    /// original code to its own target. (Numbers are synthetic, not real SCTIDs.)
+    func testReplacingInactiveConcepts_collidingTargetAndInactiveId_doesNotChain() async {
+        let viewModel = LookupViewModel(selectionReader: MockSelectionReader(), client: MockLookupClient())
+        let text = "<< 11111111 OR << 22222222"
+        let replacements = [
+            "11111111": "22222222 |Concept B|",
+            "22222222": "99999999 |Concept C|",
+        ]
+
+        let result = viewModel.replacingInactiveConcepts(in: text, with: replacements)
+
+        XCTAssertEqual(
+            result,
+            "<< 22222222 |Concept B| OR << 99999999 |Concept C|",
+            "Each original code must map to its own target, not chain through inserted text"
+        )
+    }
+
+    /// Verifies an inactive concept's existing pipe-delimited term is consumed
+    /// and replaced along with the code.
+    func testReplacingInactiveConcepts_replacesExistingTerm() async {
+        let viewModel = LookupViewModel(selectionReader: MockSelectionReader(), client: MockLookupClient())
+        let text = "73211009 | Old display |"
+        let replacements = ["73211009": "385804009 |New display|"]
+
+        let result = viewModel.replacingInactiveConcepts(in: text, with: replacements)
+
+        XCTAssertEqual(result, "385804009 |New display|")
+    }
+
+    /// Verifies concepts not present in the replacement map are left untouched.
+    func testReplacingInactiveConcepts_leavesUnmappedCodesUntouched() async {
+        let viewModel = LookupViewModel(selectionReader: MockSelectionReader(), client: MockLookupClient())
+        let text = "73211009 and 22222222"
+        let replacements = ["22222222": "99999999 |Concept C|"]
+
+        let result = viewModel.replacingInactiveConcepts(in: text, with: replacements)
+
+        XCTAssertEqual(result, "73211009 and 99999999 |Concept C|")
+    }
+
+    /// Verifies multiple occurrences of the same inactive code are all replaced.
+    func testReplacingInactiveConcepts_replacesAllOccurrences() async {
+        let viewModel = LookupViewModel(selectionReader: MockSelectionReader(), client: MockLookupClient())
+        let text = "11111111 OR 11111111"
+        let replacements = ["11111111": "22222222 |Concept B|"]
+
+        let result = viewModel.replacingInactiveConcepts(in: text, with: replacements)
+
+        XCTAssertEqual(result, "22222222 |Concept B| OR 22222222 |Concept B|")
+    }
 }
