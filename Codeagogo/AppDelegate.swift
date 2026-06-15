@@ -1122,19 +1122,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     return
                 }
 
-                // 6. Replace in text — use regex to match concept ID + optional display term
-                var result = text
-                for (conceptId, replacement) in replacementsByCode {
-                    let pattern = "(?<![0-9])" + NSRegularExpression.escapedPattern(for: conceptId) + "(?![0-9])" + "(\\s*\\|[^|]*\\|)?"
-                    if let regex = try? NSRegularExpression(pattern: pattern) {
-                        let range = NSRange(result.startIndex..., in: result)
-                        result = regex.stringByReplacingMatches(
-                            in: result,
-                            options: [],
-                            range: range,
-                            withTemplate: NSRegularExpression.escapedTemplate(for: replacement)
-                        )
-                    }
+                // 6. Replace in text using position-based substitution against the
+                //    original text. Matching the concept ID (plus its optional display
+                //    term) by position and applying replacements in reverse order makes
+                //    each replacement immune to text inserted by other iterations —
+                //    avoiding corruption when one inactive concept's replacement target
+                //    equals another inactive concept's ID (see issue #2).
+                let replacement = model.replacingInactiveConcepts(in: text, with: replacementsByCode)
+                let result = replacement.text
+
+                // Reconcile intent against reality: a concept may have a replacement
+                // but not be located in the text by the extractor (e.g. input over the
+                // extraction size limit). Don't report those as replaced — log instead.
+                let missed = Set(replacementsByCode.keys).subtracting(replacement.replacedConceptIds)
+                if !missed.isEmpty {
+                    AppLog.warning(AppLog.ui, "Replace inactive: \(missed.count) concept(s) had a replacement but could not be located in the text: \(missed.sorted())")
                 }
 
                 // 7. Put result on clipboard and paste
@@ -1150,8 +1152,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
                 progressHUD.hide()
 
-                let count = replacementsByCode.count
+                let count = replacement.replacedConceptIds.count
                 var message = "Replaced \(count) inactive concept\(count == 1 ? "" : "s")"
+                if !missed.isEmpty {
+                    message += " (\(missed.count) could not be located)"
+                }
                 if !noReplacementIds.isEmpty {
                     message += " (\(noReplacementIds.count) had no replacement)"
                 }

@@ -419,6 +419,54 @@ final class LookupViewModel: ObservableObject {
         return ConceptMatch(conceptId: conceptId, range: fullRange, existingTerm: existingTerm, isSCTID: isSCTID)
     }
 
+    /// The outcome of an inactive-concept replacement pass.
+    struct InactiveReplacementResult {
+        /// The text after substitution.
+        let text: String
+        /// The concept IDs that were actually located in the text and replaced.
+        ///
+        /// This may be a strict subset of `replacementsByCode.keys`: a code that
+        /// was supplied a replacement but is not surfaced in `text` by
+        /// ``extractAllConceptIds(from:)`` (e.g. input over the extraction size
+        /// limit, or a token the extractor's boundaries reject) is not replaced
+        /// and does not appear here. Callers should reconcile against the
+        /// intended keys rather than assume every replacement was applied.
+        let replacedConceptIds: Set<String>
+    }
+
+    /// Replaces inactive concept IDs in `text` with their target replacements.
+    ///
+    /// Every concept ID that ``extractAllConceptIds(from:)`` locates in `text`
+    /// and that is present as a key in `replacementsByCode` is replaced — along
+    /// with its optional pipe-delimited term — by the mapped replacement string.
+    /// A key with no corresponding match in `text` is left untouched and is
+    /// reported via `InactiveReplacementResult.replacedConceptIds` (by omission).
+    ///
+    /// Replacements are located against the **original** `text` and applied in
+    /// reverse positional order using `replaceSubrange`. Because positions are
+    /// resolved before any mutation and applied back-to-front, text inserted by
+    /// one replacement can never be re-matched by another. This avoids the
+    /// corruption that a chained regex over an accumulating result produces when
+    /// one inactive concept's replacement target equals another inactive
+    /// concept's ID (see issue #2).
+    ///
+    /// - Parameters:
+    ///   - text: The original selection text.
+    ///   - replacementsByCode: Map of inactive concept ID → replacement text
+    ///     (a code with optional term, or an `(A OR B)` group).
+    /// - Returns: The substituted text and the set of concept IDs actually replaced.
+    func replacingInactiveConcepts(in text: String, with replacementsByCode: [String: String]) -> InactiveReplacementResult {
+        let matches = extractAllConceptIds(from: text)
+        var result = text
+        var replaced: Set<String> = []
+        for match in matches.reversed() {
+            guard let replacement = replacementsByCode[match.conceptId] else { continue }
+            result.replaceSubrange(match.range, with: replacement)
+            replaced.insert(match.conceptId)
+        }
+        return InactiveReplacementResult(text: result, replacedConceptIds: replaced)
+    }
+
     /// Copies a string to the system pasteboard.
     ///
     /// - Parameter s: The string to copy. If `nil` or empty, no action is taken.
