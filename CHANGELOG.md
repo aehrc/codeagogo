@@ -37,6 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Replace Inactive**: Fixed chained-regex replacement that could corrupt output when one inactive concept's replacement target SCTID matched another inactive concept's ID in the same selection. Replacements are now located by position against the original text and applied in reverse order, mirroring Replace Selection (issue #2). The completion message now reports the number of concepts actually replaced (rather than the number attempted) and logs a warning if any concept with a replacement could not be located in the text.
 
 ### Security
+- Bumped build-time `esbuild` 0.25.12 → 0.28.1, clearing advisory GHSA-gv7w-rqvm-qjhr (`npm audit`: 0 vulnerabilities). Build-time only — esbuild is not shipped in the app; the ecl-core bundle was regenerated and verified.
 - XSS prevention in WebView rendering
 - Input size and depth limits on all parsers
 - HTTPS enforcement with ATS configuration

@@ -40,12 +40,16 @@ var ECLCore = (() => {
     throw Error('Dynamic require of "' + x + '" is not supported');
   });
   var __commonJS = (cb, mod) => function __require2() {
-    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+    try {
+      return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+    } catch (e) {
+      throw mod = 0, e;
+    }
   };
 
-  // node_modules/@aehrc/ecl-core/dist/index.cjs
+  // scripts/node_modules/@aehrc/ecl-core/dist/index.cjs
   var require_index = __commonJS({
-    "node_modules/@aehrc/ecl-core/dist/index.cjs"(exports) {
+    "scripts/node_modules/@aehrc/ecl-core/dist/index.cjs"(exports) {
       var __defProp = Object.defineProperty;
       var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
       var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
@@ -282,7 +286,7 @@ var ECLCore = (() => {
             return true;
           }
           var obj = {};
-          var sym = Symbol("test");
+          var sym = /* @__PURE__ */ Symbol("test");
           var symObj = Object(sym);
           if (typeof sym === "string") {
             return false;
@@ -528,7 +532,7 @@ var ECLCore = (() => {
           if (typeof origSymbol("foo") !== "symbol") {
             return false;
           }
-          if (typeof Symbol("bar") !== "symbol") {
+          if (typeof /* @__PURE__ */ Symbol("bar") !== "symbol") {
             return false;
           }
           return hasSymbolSham();
@@ -2501,7 +2505,7 @@ var ECLCore = (() => {
           function hasOwnProperty(obj, prop) {
             return Object.prototype.hasOwnProperty.call(obj, prop);
           }
-          var kCustomPromisifiedSymbol = typeof Symbol !== "undefined" ? Symbol("util.promisify.custom") : void 0;
+          var kCustomPromisifiedSymbol = typeof Symbol !== "undefined" ? /* @__PURE__ */ Symbol("util.promisify.custom") : void 0;
           exports$1.promisify = function promisify(original) {
             if (typeof original !== "function")
               throw new TypeError('The "original" argument must be of type Function');
@@ -3632,7 +3636,7 @@ var ECLCore = (() => {
         if (hasRequiredDefineProperties) return defineProperties_1;
         hasRequiredDefineProperties = 1;
         var keys = requireObjectKeys();
-        var hasSymbols2 = typeof Symbol === "function" && typeof Symbol("foo") === "symbol";
+        var hasSymbols2 = typeof Symbol === "function" && typeof /* @__PURE__ */ Symbol("foo") === "symbol";
         var toStr = Object.prototype.toString;
         var concat = Array.prototype.concat;
         var defineDataProperty2 = /* @__PURE__ */ requireDefineDataProperty();
