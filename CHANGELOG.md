@@ -32,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Welcome Screen**: First-launch onboarding with mailing list and GitHub links.
 
 ### Security
+- Bumped build-time `esbuild` 0.25.12 → 0.28.1, clearing advisory GHSA-gv7w-rqvm-qjhr (`npm audit`: 0 vulnerabilities). Build-time only — esbuild is not shipped in the app; the ecl-core bundle was regenerated and verified.
 - XSS prevention in WebView rendering
 - Input size and depth limits on all parsers
 - HTTPS enforcement with ATS configuration
