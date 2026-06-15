@@ -1128,7 +1128,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 //    each replacement immune to text inserted by other iterations —
                 //    avoiding corruption when one inactive concept's replacement target
                 //    equals another inactive concept's ID (see issue #2).
-                let result = model.replacingInactiveConcepts(in: text, with: replacementsByCode)
+                let replacement = model.replacingInactiveConcepts(in: text, with: replacementsByCode)
+                let result = replacement.text
+
+                // Reconcile intent against reality: a concept may have a replacement
+                // but not be located in the text by the extractor (e.g. input over the
+                // extraction size limit). Don't report those as replaced — log instead.
+                let missed = Set(replacementsByCode.keys).subtracting(replacement.replacedConceptIds)
+                if !missed.isEmpty {
+                    AppLog.warning(AppLog.ui, "Replace inactive: \(missed.count) concept(s) had a replacement but could not be located in the text: \(missed.sorted())")
+                }
 
                 // 7. Put result on clipboard and paste
                 let pb = NSPasteboard.general
@@ -1143,8 +1152,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
                 progressHUD.hide()
 
-                let count = replacementsByCode.count
+                let count = replacement.replacedConceptIds.count
                 var message = "Replaced \(count) inactive concept\(count == 1 ? "" : "s")"
+                if !missed.isEmpty {
+                    message += " (\(missed.count) could not be located)"
+                }
                 if !noReplacementIds.isEmpty {
                     message += " (\(noReplacementIds.count) had no replacement)"
                 }
