@@ -37,7 +37,7 @@ SOFTWARE.
 
 ## @aehrc/ecl-core
 
-- **Version**: ^1.0.0
+- **Version**: ^1.6.1
 - **License**: Apache-2.0
 - **Usage**: Bundled as `ecl-core-bundle.js` (app resource) for ECL parsing, formatting, validation, concept extraction, and knowledge base access via JavaScriptCore
 - **Repository**: https://github.com/aehrc/ecl-lsp/tree/main/packages/ecl-core
@@ -63,7 +63,7 @@ limitations under the License.
 
 ## @aehrc/ecl-editor
 
-- **Version**: ^1.0.0
+- **Version**: ^1.6.1
 - **License**: Apache-2.0
 - **Usage**: Bundled as `ecl-editor.standalone.js` (app resource) for the ECL Workbench Monaco-based editor in WKWebView
 - **Repository**: https://github.com/aehrc/ecl-lsp/tree/main/packages/ecl-editor

@@ -2,9 +2,9 @@
   "private": true,
   "description": "Build dependencies for bundling ecl-core into JavaScriptCore",
   "dependencies": {
-    "@aehrc/ecl-core": "^1.1.2",
+    "@aehrc/ecl-core": "^1.6.1",
     "assert": "^2.1.0",
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "util": "^0.12.5"
   }
 }
