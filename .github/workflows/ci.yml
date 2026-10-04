@@ -101,7 +101,7 @@ jobs:
           xcodebuild test \
             -scheme "$SCHEME" \
             -destination "$DESTINATION" \
-            -only-testing:"CodeagogoTests" \
+            -testPlan "Codeagogo-Unit" \
             -configuration Debug \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
@@ -109,12 +109,16 @@ jobs:
             ENABLE_APP_SANDBOX=NO \
             | xcbeautify
 
+      # The UI tests live only in the Codeagogo-UI test plan (it also skips the
+      # SearchPanelUITests suite, which hangs XCUITest). GitHub's macOS runners
+      # have a logged-in GUI session, which XCUITest needs; no display required.
       - name: UI Tests
+        timeout-minutes: 20
         run: |
           xcodebuild test \
             -scheme "$SCHEME" \
             -destination "$DESTINATION" \
-            -only-testing:"CodeagogoUITests" \
+            -testPlan "Codeagogo-UI" \
             -configuration Debug \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=YES \
