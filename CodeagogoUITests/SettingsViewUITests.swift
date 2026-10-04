@@ -188,6 +188,7 @@ final class SettingsViewUITests: SNOMEDLookupUITestCase {
             XCTFail("Debug logging toggle not found")
             return
         }
+        scrollIntoView(toggle, in: settingsWindow)
         let initialValue = toggle.value as? Int ?? 0
         toggle.click()
         let newValue = toggle.value as? Int ?? 0
@@ -212,6 +213,7 @@ final class SettingsViewUITests: SNOMEDLookupUITestCase {
             return
         }
         XCTAssertTrue(button.isEnabled, "Diagnostics button should be enabled")
+        scrollIntoView(button, in: settingsWindow)
         button.click()
         // Button should still exist after clicking
         XCTAssertTrue(button.exists,

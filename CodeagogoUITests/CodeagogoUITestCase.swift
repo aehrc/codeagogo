@@ -66,4 +66,21 @@ class SNOMEDLookupUITestCase: XCTestCase {
         }
         return settingsWindow
     }
+
+    /// Scrolls the window's scroll view until `element` can be clicked.
+    ///
+    /// The Settings window is taller than small screens (such as CI runners),
+    /// so controls near the bottom of its scroll view start out off-screen and
+    /// are not hittable until scrolled into view.
+    ///
+    /// - Parameters:
+    ///   - element: The element to bring into view.
+    ///   - window: The window containing the scroll view.
+    func scrollIntoView(_ element: XCUIElement, in window: XCUIElement) {
+        let scrollView = window.scrollViews.firstMatch
+        guard scrollView.exists else { return }
+        for _ in 0..<10 where !element.isHittable {
+            scrollView.scroll(byDeltaX: 0, deltaY: -200)
+        }
+    }
 }
