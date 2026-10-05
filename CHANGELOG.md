@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **Settings window on smaller screens**: The Settings window had a fixed 1060pt height, so on shorter displays (such as a 13" MacBook Air) its bottom extended off-screen and the logging and diagnostics controls could not be reached. It now opens at most as tall as the screen's visible area, scrolls when the content doesn't fit, and can be resized between 480pt and its full height.
+
 ## [1.1.1] - 2026-06
 
 ### Fixed
