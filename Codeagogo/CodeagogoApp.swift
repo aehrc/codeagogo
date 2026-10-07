@@ -22,6 +22,8 @@ struct Snomed_LookupApp: App {
         Settings {
             SettingsView()
         }
+        // Size the window from SettingsView's min/ideal/max height so it fits the screen.
+        .windowResizability(.contentSize)
         .commands {
             // Add items in the Help menu (native place for diagnostics)
             CommandGroup(after: .help) {

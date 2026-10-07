@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **ECL Workbench concept typeahead**: Concept search suggestions now appear reliably once typing pauses. Previously results were only shown on the *next* keystroke and were computed for the previous text, so typeahead often appeared not to activate (fixed upstream in ecl-editor-core 1.6.1).
 - **ECL Workbench shortcut hint**: The hint bar now shows `⌃+Space` for autocomplete on macOS. It previously showed `⌘+Space`, which opens Spotlight and never triggered autocomplete (ecl-editor 1.6.2).
 - **Format / Simplify ECL**: Constraint operators on refinement attribute names (e.g. `<< 363698007 = …`) are no longer silently dropped, and alternate identifiers, numeric/string comparisons and member field selections now survive formatting (ecl-core 1.6.0).
+- **Settings window on smaller screens**: The Settings window had a fixed 1060pt height, so on shorter displays (such as a 13" MacBook Air) its bottom extended off-screen and the logging and diagnostics controls could not be reached. It now opens at most as tall as the screen's visible area, scrolls when the content doesn't fit, and can be resized between 480pt and its full height.
 
 ### Changed
 - **ecl-core 1.6.2**: Updated from 1.1.2. Also adds parsing of the top/bottom of set operators (`!!>`, `!!<`).

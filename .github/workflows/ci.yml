@@ -10,14 +10,20 @@ env:
   SCHEME: "Codeagogo"
   DESTINATION: "platform=macOS"
 
+# Explicit bash runs steps with `-eo pipefail`, so an xcodebuild failure is not
+# masked by the exit status of the xcbeautify formatter it is piped into.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   lint:
     name: SwiftLint
-    runs-on: macos-14
+    runs-on: macos-26
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install SwiftLint
         run: brew install swiftlint
@@ -27,22 +33,22 @@ jobs:
 
   audit:
     name: Dependency Audit
-    runs-on: macos-14
+    runs-on: macos-26
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Audit Dependencies
         run: ./scripts/audit-dependencies.sh
 
   secrets:
     name: Secrets Scan
-    runs-on: macos-14
+    runs-on: macos-26
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -54,26 +60,26 @@ jobs:
 
   license-headers:
     name: License Headers
-    runs-on: macos-14
+    runs-on: macos-26
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Check license headers
         run: ./scripts/license-header.sh --check
 
   build-and-test:
     name: Build and Test
-    runs-on: macos-14
+    runs-on: macos-26
     needs: [lint, audit, secrets, license-headers]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
 
       - name: Show Xcode version
         run: xcodebuild -version
@@ -88,46 +94,50 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             ENABLE_HARDENED_RUNTIME=NO \
             ENABLE_APP_SANDBOX=NO \
-            | xcpretty
+            | xcbeautify
 
       - name: Unit Tests
         run: |
           xcodebuild test \
             -scheme "$SCHEME" \
             -destination "$DESTINATION" \
-            -only-testing:"CodeagogoTests" \
+            -testPlan "Codeagogo-Unit" \
             -configuration Debug \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             ENABLE_HARDENED_RUNTIME=NO \
             ENABLE_APP_SANDBOX=NO \
-            | xcpretty
+            | xcbeautify
 
+      # The UI tests live only in the Codeagogo-UI test plan (it also skips the
+      # SearchPanelUITests suite, which hangs XCUITest). GitHub's macOS runners
+      # have a logged-in GUI session, which XCUITest needs; no display required.
       - name: UI Tests
+        timeout-minutes: 20
         run: |
           xcodebuild test \
             -scheme "$SCHEME" \
             -destination "$DESTINATION" \
-            -only-testing:"CodeagogoUITests" \
+            -testPlan "Codeagogo-UI" \
             -configuration Debug \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=YES \
             ENABLE_HARDENED_RUNTIME=NO \
             ENABLE_APP_SANDBOX=NO \
-            | xcpretty
+            | xcbeautify
 
   build-artifact:
     name: Build Release Artifact
-    runs-on: macos-14
+    runs-on: macos-26
     needs: build-and-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
 
       - name: Install Apple Certificate
         env:
@@ -180,7 +190,7 @@ jobs:
           zip -r "Codeagogo-macOS.zip" "Codeagogo.app"
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Codeagogo-macOS
           path: artifact/Codeagogo-macOS.zip
