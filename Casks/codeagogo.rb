@@ -1,6 +1,6 @@
 cask "codeagogo" do
-  version "1.1.1"
-  sha256 "e54d70483c4d6cd5fe644b3489e4e70c5ea7ead8599a9f95758e89122356f5fd"
+  version "1.2.0"
+  sha256 "cc2c5c1257c586c8cd4dbe18536cbbbd21f0a2c09458c87f493c8875a95e4bee"
 
   url "https://github.com/aehrc/codeagogo/releases/download/v#{version}/Codeagogo-v#{version}-macOS.zip"
   name "Codeagogo"
