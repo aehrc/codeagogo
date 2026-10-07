@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10
+
 ### Fixed
 - **ECL Workbench concept typeahead**: Concept search suggestions now appear reliably once typing pauses. Previously results were only shown on the *next* keystroke and were computed for the previous text, so typeahead often appeared not to activate (fixed upstream in ecl-editor-core 1.6.1).
 - **ECL Workbench shortcut hint**: The hint bar now shows `⌃+Space` for autocomplete on macOS. It previously showed `⌘+Space`, which opens Spotlight and never triggered autocomplete (ecl-editor 1.6.2).
