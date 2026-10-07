@@ -414,7 +414,27 @@ struct SettingsView: View {
             }
             .padding(16)
         }
-        .frame(width: 520, height: 1060)
+        .frame(width: 520)
+        .frame(minHeight: Self.minimumHeight, idealHeight: Self.fittingHeight, maxHeight: Self.contentHeight)
+    }
+
+    // MARK: - Window Sizing
+
+    /// Height at which all settings are visible without scrolling.
+    private static let contentHeight: CGFloat = 1060
+
+    /// Smallest height the window can be resized to.
+    private static let minimumHeight: CGFloat = 480
+
+    /// Space reserved for the window's title bar when fitting it to the screen.
+    private static let titleBarAllowance: CGFloat = 40
+
+    /// Initial window height: the full content height, capped to the main screen's
+    /// visible area so the window never extends past the bottom of smaller screens.
+    /// The scroll view handles the overflow.
+    private static var fittingHeight: CGFloat {
+        guard let visibleHeight = NSScreen.main?.visibleFrame.height else { return contentHeight }
+        return max(minimumHeight, min(contentHeight, visibleHeight - titleBarAllowance))
     }
 
     // MARK: - Code System Helpers
