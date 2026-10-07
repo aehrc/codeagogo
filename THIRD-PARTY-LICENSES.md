@@ -37,7 +37,7 @@ SOFTWARE.
 
 ## @aehrc/ecl-core
 
-- **Version**: ^1.0.0
+- **Version**: ^1.6.2
 - **License**: Apache-2.0
 - **Usage**: Bundled as `ecl-core-bundle.js` (app resource) for ECL parsing, formatting, validation, concept extraction, and knowledge base access via JavaScriptCore
 - **Repository**: https://github.com/aehrc/ecl-lsp/tree/main/packages/ecl-core
@@ -63,13 +63,46 @@ limitations under the License.
 
 ## @aehrc/ecl-editor
 
-- **Version**: ^1.0.0
+- **Version**: ^1.6.2
 - **License**: Apache-2.0
 - **Usage**: Bundled as `ecl-editor.standalone.js` (app resource) for the ECL Workbench Monaco-based editor in WKWebView
 - **Repository**: https://github.com/aehrc/ecl-lsp/tree/main/packages/ecl-editor
 - **npm**: https://www.npmjs.com/package/@aehrc/ecl-editor
 
 Same Apache License 2.0 as @aehrc/ecl-core (same repository and copyright holder).
+
+---
+
+## monaco-editor
+
+- **Version**: 0.57.0
+- **License**: MIT
+- **Usage**: Loaded at runtime from the jsDelivr CDN (not bundled) by the ECL Workbench `WKWebView`; provides the editor that `@aehrc/ecl-editor` runs in
+- **Repository**: https://github.com/microsoft/monaco-editor
+- **npm**: https://www.npmjs.com/package/monaco-editor
+- **Third-party notices**: https://cdn.jsdelivr.net/npm/monaco-editor@0.57.0/ThirdPartyNotices.txt
+
+### MIT License
+
+Copyright (c) 2016 - present Microsoft Corporation
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ---
 

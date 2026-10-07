@@ -659,6 +659,34 @@ final class ECLBridgeTests: XCTestCase {
         XCTAssertNil(selected)
     }
 
+    // MARK: - ecl-core 1.6 Regression Tests
+
+    /// ecl-core < 1.6 dropped the constraint operator on a refinement attribute
+    /// name, so Format ECL silently turned `<< 363698007` into `363698007`.
+    func testFormatPreservesAttributeNameOperator() {
+        let result = bridge.formatECL("< 404684003: << 363698007 = << 39057004")
+        XCTAssertTrue(result?.contains("<< 363698007 = << 39057004") ?? false, "Got: \(result ?? "nil")")
+    }
+
+    func testFormatPreservesAncestorAttributeNameOperatorWithTerm() {
+        let result = bridge.formatECL("< 404684003 |Clinical finding|: >> 363698007 = << 39057004")
+        XCTAssertTrue(result?.contains(">> 363698007 = << 39057004") ?? false, "Got: \(result ?? "nil")")
+    }
+
+    func testCanonicalisePreservesAttributeNameOperator() {
+        XCTAssertEqual(
+            bridge.canonicalise("< 404684003: << 363698007 = << 39057004"),
+            "<404684003:<<363698007 = <<39057004"
+        )
+    }
+
+    /// Numeric comparison refinements failed to parse before ecl-core 1.6.
+    func testNumericComparisonRefinementParses() {
+        let ecl = "< 404684003: 363698007 >= #10"
+        XCTAssertTrue(bridge.isValidECL(ecl))
+        XCTAssertEqual(bridge.canonicalise(ecl), "<404684003:363698007 >= #10")
+    }
+
     // MARK: - Replacement Test Helpers
 
     /// Mirrors the regex replacement logic from AppDelegate.replaceInactiveConceptsInSelection.
