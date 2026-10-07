@@ -8,11 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 - **ECL Workbench concept typeahead**: Concept search suggestions now appear reliably once typing pauses. Previously results were only shown on the *next* keystroke and were computed for the previous text, so typeahead often appeared not to activate (fixed upstream in ecl-editor-core 1.6.1).
+- **ECL Workbench shortcut hint**: The hint bar now shows `⌃+Space` for autocomplete on macOS. It previously showed `⌘+Space`, which opens Spotlight and never triggered autocomplete (ecl-editor 1.6.2).
 - **Format / Simplify ECL**: Constraint operators on refinement attribute names (e.g. `<< 363698007 = …`) are no longer silently dropped, and alternate identifiers, numeric/string comparisons and member field selections now survive formatting (ecl-core 1.6.0).
 
 ### Changed
-- **ecl-core 1.6.1**: Updated from 1.1.2. Also adds parsing of the top/bottom of set operators (`!!>`, `!!<`).
-- **ecl-editor 1.6.1**: ECL Workbench bundle rebuilt from the ecl-lsp v1.6.1 tag.
+- **ecl-core 1.6.2**: Updated from 1.1.2. Also adds parsing of the top/bottom of set operators (`!!>`, `!!<`).
+- **ecl-editor 1.6.2**: ECL Workbench bundle rebuilt from the ecl-lsp v1.6.2 tag.
 - **Monaco 0.57.0**: ECL Workbench now loads Monaco 0.57.0 (was 0.52.2), matching the version ecl-lsp is tested against.
 - Bumped build-time `esbuild` 0.28.1 → 0.28.2.
 
